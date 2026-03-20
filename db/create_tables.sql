@@ -16,8 +16,13 @@ CREATE TABLE IF NOT EXISTS "36_elemental-search".prefectures (
 CREATE TABLE IF NOT EXISTS "36_elemental-search".cities (
     city_code        TEXT PRIMARY KEY,   -- '01101' など
     name             TEXT NOT NULL,      -- '札幌市中央区' など
-    prefecture_slug  TEXT REFERENCES "36_elemental-search".prefectures(slug) ON DELETE CASCADE
+    prefecture_slug  TEXT REFERENCES "36_elemental-search".prefectures(slug) ON DELETE CASCADE,
+    scraped_at       TIMESTAMPTZ         -- スクレイピング完了日時（NULLは未取得）
 );
+
+-- 既存テーブルへのカラム追加（再実行時用）
+ALTER TABLE "36_elemental-search".cities
+    ADD COLUMN IF NOT EXISTS scraped_at TIMESTAMPTZ;
 
 CREATE INDEX IF NOT EXISTS idx_cities_prefecture ON "36_elemental-search".cities(prefecture_slug);
 

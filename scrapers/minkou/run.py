@@ -1,10 +1,10 @@
 """
-都道府県名・市区町村名を引数にして minkou.jp をスクレイピングし Supabase に格納する
+都道府県を指定 → 市区町村をDBから選択 → スクレイピング → Supabase格納
 
 使い方:
-    python scrapers/minkou/run.py --pref 東京都 --city 新宿区
-    python scrapers/minkou/run.py --pref 東京都          # 都道府県全体
-    python scrapers/minkou/run.py --pref tokyo --city 13104  # slug/codeでも可
+    python scrapers/minkou/run.py --pref 東京都
+    python scrapers/minkou/run.py --pref tokyo
+    python scrapers/minkou/run.py --pref 東京都 --force   # 取得済みも再実行
 
 前提:
     fetch_locations.py を先に実行して prefectures/cities テーブルを埋めておくこと
@@ -15,9 +15,17 @@ import os
 import time
 import argparse
 import requests
+import threading
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timezone
 from pathlib import Path
+
 from dotenv import load_dotenv
 from supabase import create_client
+from rich.console import Console
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeRemainingColumn
+from rich.table import Table
+from rich import print as rprint
 
 sys.path.insert(0, str(Path(__file__).parent))
 from scraper import get_school_links, get_all_reviews, get_soup, parse_school_info
@@ -29,6 +37,8 @@ SCHEMA = "36_elemental-search"
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY")
 
+console = Console()
+
 
 def get_client():
     if not SUPABASE_URL or not SUPABASE_KEY:
@@ -36,90 +46,187 @@ def get_client():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-def resolve_pref_slug(pref: str, client) -> str:
-    """都道府県名（'東京都'）またはスラッグ（'tokyo'）をスラッグに解決する"""
+def resolve_pref_slug(pref: str, client) -> tuple[str, str]:
+    """都道府県名またはスラッグを (slug, name) に解決する"""
     rows = client.schema(SCHEMA).table("prefectures").select("slug,name").execute().data
     for row in rows:
         if row["slug"] == pref or row["name"] == pref:
-            return row["slug"]
+            return row["slug"], row["name"]
     raise ValueError(
         f"都道府県が見つかりません: '{pref}'\n"
         "先に fetch_locations.py を実行してDBを埋めてください"
     )
 
 
-def resolve_city_code(city: str, pref_slug: str, client) -> str:
-    """市区町村名（'新宿区'）またはコード（'13104'）をコードに解決する"""
-    if city.isdigit():
-        return city
+def fetch_cities_from_db(pref_slug: str, client) -> list[dict]:
+    """DBから市区町村一覧を取得する（scraped_at含む）"""
     rows = (
         client.schema(SCHEMA).table("cities")
-        .select("city_code,name")
+        .select("city_code,name,scraped_at")
         .eq("prefecture_slug", pref_slug)
+        .order("city_code")
         .execute()
         .data
     )
-    for row in rows:
-        if row["name"] == city:
-            return row["city_code"]
-    raise ValueError(
-        f"市区町村が見つかりません: '{city}'\n"
-        "先に fetch_locations.py を実行してDBを埋めてください"
-    )
+    return rows
+
+
+def select_cities(cities: list[dict], force: bool) -> list[dict]:
+    """番号入力で市区町村を複数選択させる"""
+    table = Table(show_header=True, header_style="bold")
+    table.add_column("No.", width=4, justify="right")
+    table.add_column("市区町村", min_width=16)
+    table.add_column("状態", min_width=16)
+
+    for i, c in enumerate(cities, 1):
+        if c["scraped_at"]:
+            dt = c["scraped_at"][:10]
+            status = f"[green]取得済 {dt}[/green]"
+        else:
+            status = "[yellow]未取得[/yellow]"
+        table.add_row(str(i), c["name"], status)
+
+    console.print(table)
+    console.print("番号をカンマ区切りで入力（例: 1,3,5）、[bold]all[/bold] で全選択、[bold]new[/bold] で未取得のみ")
+
+    while True:
+        raw = input("> ").strip()
+        if not raw:
+            console.print("[yellow]キャンセルしました[/yellow]")
+            sys.exit(0)
+
+        if raw.lower() == "all":
+            return cities
+
+        if raw.lower() == "new":
+            selected = [c for c in cities if not c["scraped_at"]]
+            if not selected:
+                console.print("[yellow]未取得の市区町村はありません。all または番号で指定してください。[/yellow]")
+                continue
+            return selected
+
+        try:
+            indices = [int(x.strip()) for x in raw.split(",")]
+            selected = []
+            for idx in indices:
+                if not (1 <= idx <= len(cities)):
+                    raise ValueError(f"{idx} は範囲外です")
+                selected.append(cities[idx - 1])
+            return selected
+        except ValueError as e:
+            console.print(f"[red]入力エラー: {e}。もう一度入力してください。[/red]")
+
+
+def mark_scraped(city_code: str, client):
+    """citiesテーブルの scraped_at を更新する"""
+    now = datetime.now(timezone.utc).isoformat()
+    client.schema(SCHEMA).table("cities").update({"scraped_at": now}).eq("city_code", city_code).execute()
+
+
+def scrape_one_school(school: dict, delay: float) -> tuple[dict, list]:
+    """1校分の詳細・口コミを取得して返す（スレッドごとに独立したsessionを使用）"""
+    session = requests.Session()
+    sid = school["school_id"]
+
+    time.sleep(delay)
+    soup = get_soup(school["school_url"], session)
+    if soup:
+        info = parse_school_info(soup, sid, school["school_url"])
+    else:
+        info = {"school_id": sid}
+
+    time.sleep(delay)
+    reviews = get_all_reviews(sid, session, delay)
+    return info, reviews
+
+
+def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, session: requests.Session):
+    city_code = city["city_code"]
+    city_name = city["name"]
+
+    console.rule(f"[bold]{city_name}[/bold]  (code={city_code})")
+
+    # 学校一覧
+    with console.status("学校一覧を収集中..."):
+        schools = get_school_links(pref_slug, city_code, session)
+    console.print(f"  → [cyan]{len(schools)}校[/cyan] 見つかりました  "
+                  f"[dim](workers={workers}, delay={delay}s)[/dim]")
+
+    all_schools = []
+    all_reviews = []
+    lock = threading.Lock()
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TextColumn("{task.completed}/{task.total} 校"),
+        TimeRemainingColumn(),
+        console=console,
+    ) as progress:
+        task = progress.add_task("学校詳細・口コミ収集中", total=len(schools))
+
+        with ThreadPoolExecutor(max_workers=workers) as executor:
+            futures = {
+                executor.submit(scrape_one_school, school, delay): school
+                for school in schools
+            }
+            for future in as_completed(futures):
+                school = futures[future]
+                try:
+                    info, reviews = future.result()
+                    with lock:
+                        all_schools.append(info)
+                        all_reviews.extend(reviews)
+                except Exception as e:
+                    console.print(f"  [red]ERROR {school['school_name']}: {e}[/red]")
+                progress.advance(task)
+
+    # Supabase格納
+    with console.status("Supabaseに格納中..."):
+        n_schools = upsert_schools(client, all_schools)
+        n_reviews = upsert_reviews(client, all_reviews)
+        mark_scraped(city_code, client)
+
+    console.print(f"  ✓ schools [green]{n_schools}件[/green]  reviews [green]{n_reviews}件[/green]  → 完了")
 
 
 def main():
     parser = argparse.ArgumentParser(description="minkou.jp スクレイピング → Supabase格納")
     parser.add_argument("--pref", required=True,
                         help="都道府県名またはスラッグ（例: 東京都 / tokyo）")
-    parser.add_argument("--city", default=None,
-                        help="市区町村名またはコード（例: 新宿区 / 13104）省略時は都道府県全体")
     parser.add_argument("--delay", type=float, default=1.5,
                         help="アクセス間隔（秒、デフォルト: 1.5）")
+    parser.add_argument("--workers", type=int, default=3,
+                        help="並列ワーカー数（デフォルト: 3、上げすぎ注意）")
+    parser.add_argument("--force", action="store_true",
+                        help="取得済みの市区町村も選択肢に表示する")
     args = parser.parse_args()
 
     client = get_client()
-    session = requests.Session()
+    session = requests.Session()  # 学校一覧取得用（シングルスレッド）
 
-    pref_slug = resolve_pref_slug(args.pref, client)
-    city_code = resolve_city_code(args.city, pref_slug, client) if args.city else None
+    pref_slug, pref_name = resolve_pref_slug(args.pref, client)
 
-    label = args.pref + (f" / {args.city}" if args.city else "（全体）")
-    print(f"\n=== minkou スクレイパー ===")
-    print(f"対象: {label}  (slug={pref_slug}, city_code={city_code})")
-    print(f"アクセス間隔: {args.delay}秒\n")
+    console.print(f"\n[bold]都道府県:[/bold] {pref_name} ({pref_slug})")
 
-    print("[Step 1] 学校一覧収集...")
-    schools = get_school_links(pref_slug, city_code, session)
-    print(f"→ {len(schools)} 校\n")
+    cities = fetch_cities_from_db(pref_slug, client)
+    if not cities:
+        console.print("[red]市区町村がDBにありません。fetch_locations.py を先に実行してください。[/red]")
+        sys.exit(1)
 
-    all_schools = []
-    all_reviews = []
+    # 取得済み件数を表示
+    done = sum(1 for c in cities if c["scraped_at"])
+    console.print(f"市区町村: {len(cities)}件  取得済: [green]{done}件[/green]  未取得: [yellow]{len(cities)-done}件[/yellow]\n")
 
-    for i, school in enumerate(schools, 1):
-        sid = school["school_id"]
-        print(f"[{i}/{len(schools)}] {school['school_name']} (ID:{sid})")
+    selected = select_cities(cities, args.force)
+    console.print(f"\n[bold]{len(selected)}件[/bold] の市区町村を処理します\n")
 
-        time.sleep(args.delay)
-        soup = get_soup(school["school_url"], session)
-        if soup:
-            info = parse_school_info(soup, sid, school["school_url"])
-            all_schools.append(info)
-            print(f"  基本情報 ✓  評価:{info['rating_avg']}  口コミ:{info['review_count']}件")
-        else:
-            all_schools.append({"school_id": sid})
+    for i, city in enumerate(selected, 1):
+        console.print(f"\n[bold][{i}/{len(selected)}][/bold]", end=" ")
+        scrape_city(city, pref_slug, args.delay, args.workers, client, session)
 
-        time.sleep(args.delay)
-        reviews = get_all_reviews(sid, session, args.delay)
-        all_reviews.extend(reviews)
-        print(f"  口コミ ✓  {len(reviews)}件")
-
-    print(f"\n[Step 2] Supabase格納...")
-    n_schools = upsert_schools(client, all_schools)
-    n_reviews = upsert_reviews(client, all_reviews)
-    print(f"  schools: {n_schools}件 ✓")
-    print(f"  reviews: {n_reviews}件 ✓")
-    print(f"\n✅ 完了")
+    console.print("\n[bold green]✅ 全処理完了[/bold green]")
 
 
 if __name__ == "__main__":
