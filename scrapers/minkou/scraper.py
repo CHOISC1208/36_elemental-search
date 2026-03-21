@@ -207,9 +207,11 @@ def parse_school_info(soup: BeautifulSoup, school_id: str, school_url: str) -> d
         if re.search(r"/primary/search/c=", href):
             info["school_type"] = text
         elif re.search(rf"/primary/search/\w+/\d+/", href):
-            info["city"] = text
+            if not info["city"]:
+                info["city"] = text
         elif re.search(rf"/primary/search/\w+/$", href):
-            info["prefecture"] = text
+            if not info["prefecture"]:
+                info["prefecture"] = text
 
     # 総合評価（数値テキストを探す）
     for node in soup.find_all(string=re.compile(r"^\s*\d\.\d{1,2}\s*$")):

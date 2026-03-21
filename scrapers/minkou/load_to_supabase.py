@@ -50,6 +50,9 @@ def load_json(filepath: str) -> dict:
 
 
 def upsert_schools(client: Client, schools: list) -> int:
+    if not schools:
+        return 0
+
     rows = []
     for s in schools:
         rows.append({
