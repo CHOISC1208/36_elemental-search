@@ -1,12 +1,11 @@
-name: Scrape minkou.jp
+name: 3) 都道府県指定取得
 
 on:
   workflow_dispatch:
     inputs:
       pref:
-        description: '都道府県（例: 東京都 / tokyo / all）'
-        required: false
-        default: 'all'
+        description: '都道府県名またはスラッグ（例: 東京都 / tokyo / 大阪府 / osaka）'
+        required: true
       delay:
         description: 'アクセス間隔（秒）'
         required: false
@@ -15,17 +14,18 @@ on:
         description: '並列ワーカー数'
         required: false
         default: '2'
-  schedule:
-    # 毎日 JST 3:00 (UTC 18:00) に実行
-    - cron: '0 18 * * *'
+      force:
+        description: '取得済みの市区町村も再取得する（true / false）'
+        required: false
+        default: 'false'
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  scrape:
+  scrape-pref:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 最大6時間
+    timeout-minutes: 360
 
     steps:
       - uses: actions/checkout@v4
@@ -37,19 +37,18 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Fetch prefectures & cities (初回のみ / 冪等)
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: uv run python scrapers/minkou/fetch_locations.py
-
-      - name: Scrape schools & reviews
+      - name: Scrape ${{ github.event.inputs.pref }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
+          FORCE_FLAG=""
+          if [ "${{ github.event.inputs.force }}" = "true" ]; then
+            FORCE_FLAG="--force"
+          fi
           uv run python scrapers/minkou/run.py \
-            --pref "${{ github.event.inputs.pref || 'all' }}" \
+            --pref "${{ github.event.inputs.pref }}" \
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}" \
-            --auto
+            --auto \
+            $FORCE_FLAG

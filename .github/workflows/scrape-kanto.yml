@@ -1,0 +1,54 @@
+name: 2) 関東取得
+
+on:
+  workflow_dispatch:
+    inputs:
+      delay:
+        description: 'アクセス間隔（秒）'
+        required: false
+        default: '2.0'
+      workers:
+        description: '並列ワーカー数'
+        required: false
+        default: '2'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# 関東7都県: 茨城・栃木・群馬・埼玉・千葉・東京・神奈川
+jobs:
+  scrape-kanto:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    strategy:
+      max-parallel: 1  # 都道府県は順番に処理（サーバー負荷軽減）
+      matrix:
+        pref:
+          - ibaraki
+          - tochigi
+          - gunma
+          - saitama
+          - chiba
+          - tokyo
+          - kanagawa
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Scrape ${{ matrix.pref }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scrapers/minkou/run.py \
+            --pref "${{ matrix.pref }}" \
+            --delay "${{ github.event.inputs.delay || '2.0' }}" \
+            --workers "${{ github.event.inputs.workers || '2' }}" \
+            --auto
