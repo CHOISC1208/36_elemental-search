@@ -19,6 +19,9 @@ on:
     # 毎日 JST 3:00 (UTC 18:00) に実行
     - cron: '0 18 * * *'
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -27,26 +30,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      - uses: astral-sh/setup-uv@v5
         with:
           python-version: '3.11'
-          cache: 'pip'
 
       - name: Install dependencies
-        run: pip install -e .
+        run: uv sync
 
       - name: Fetch prefectures & cities (初回のみ / 冪等)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: python scrapers/minkou/fetch_locations.py
+        run: uv run python scrapers/minkou/fetch_locations.py
 
       - name: Scrape schools & reviews
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          python scrapers/minkou/run.py \
+          uv run python scrapers/minkou/run.py \
             --pref "${{ github.event.inputs.pref || 'all' }}" \
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}" \
