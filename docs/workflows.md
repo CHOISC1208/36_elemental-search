@@ -32,26 +32,12 @@
 
 | パラメータ | 説明 | 例 |
 |---|---|---|
-| `pref_minkou` | minkou用の都道府県（名前またはスラッグ） | `東京都` / `tokyo` |
-| `pref_gaccom` | gaccom用の都道府県コード（数値） | `13` |
+| `pref` | 都道府県（ドロップダウンで選択） | `東京都` |
 | `delay` | アクセス間隔（秒）。デフォルト `2.0` | `2.0` |
 | `workers` | 並列ワーカー数。デフォルト `2` | `2` |
 | `force` | `true` にすると minkou の取得済み市区町村も再取得 | `false` |
 
-### 都道府県コード対応表（gaccom用）
-
-| 都道府県 | コード | スラッグ（minkou用） |
-|---|---|---|
-| 茨城県 | 8 | ibaraki |
-| 栃木県 | 9 | tochigi |
-| 群馬県 | 10 | gunma |
-| 埼玉県 | 11 | saitama |
-| 千葉県 | 12 | chiba |
-| 東京都 | 13 | tokyo |
-| 神奈川県 | 14 | kanagawa |
-| 大阪府 | 27 | osaka |
-| 京都府 | 26 | kyoto |
-| 兵庫県 | 28 | hyogo |
+`pref` は GitHub Actions の UI でドロップダウンから選択できる（全47都道府県）。
 
 ### 動作の違い（minkou vs gaccom）
 
