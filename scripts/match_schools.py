@@ -41,11 +41,16 @@ console = Console()
 SCORE_HIGH  = 0.85  # 自動確定
 SCORE_LOW   = 0.60  # 要レビュー下限
 
-KANTO_PREF_NAMES = ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県"]
+KANTO_PREF_NAMES = ["茨城", "栃木", "群馬", "埼玉", "千葉", "東京", "神奈川"]
+KANTO_PREF_NAMES_GACCOM = ["茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県"]
 
 PREF_ALIASES = {
     "関東": KANTO_PREF_NAMES,
     "kanto": KANTO_PREF_NAMES,
+}
+PREF_ALIASES_GACCOM = {
+    "関東": KANTO_PREF_NAMES_GACCOM,
+    "kanto": KANTO_PREF_NAMES_GACCOM,
 }
 
 
@@ -56,6 +61,8 @@ PREF_ALIASES = {
 def normalize_address(text: str) -> str:
     if not text or (isinstance(text, float)):
         return ""
+    # スクレイピングノイズ除去
+    text = re.sub(r'ここに地図が表示されます.*', '', text).strip()
     text = jaconv.z2h(text, kana=False, digit=True, ascii=True)
     # 都道府県除去
     text = re.sub(r'^(東京都|大阪府|京都府|.+?[都道府県])', '', text)
@@ -161,14 +168,28 @@ def match_pref(pref: str, schools: list[dict], gaccom_schools: list[dict]) -> tu
     links = []
     review = []
 
+    # 同一都道府県内で校名が重複しているかを事前チェック
+    from collections import Counter
+    name_counts = Counter(s.get("school_name", "") for s in schools)
+
     for s in schools:
         best = None
+        city = s.get("city", "") or ""
+
         for g in gaccom_schools:
             # 両方とも名前・住所が空なら skip
             if not s.get("school_name") and not s.get("address"):
                 continue
             if not g.get("school_name") and not g.get("address"):
                 continue
+
+            # 市区町村が食い違うケースを除外（住所スコアが低い場合のみ適用）
+            if city:
+                g_text = (g.get("school_name", "") or "") + (g.get("address", "") or "")
+                if city not in g_text:
+                    scores = calc_match_score(s, g)
+                    if scores["addr_score"] < 0.70:
+                        continue  # 別の市区町村の同名校と判断してスキップ
 
             scores = calc_match_score(s, g)
             if scores["match_score"] < SCORE_LOW:
@@ -193,7 +214,17 @@ def match_pref(pref: str, schools: list[dict], gaccom_schools: list[dict]) -> tu
         }
         links.append(link)
 
-        if best["match_score"] < SCORE_HIGH:
+        # name_score=1.0 かつ都道府県内でその校名がユニークなら高信頼扱い
+        # または addr_score >= 0.85（住所が高精度一致）なら高信頼扱い
+        school_name = best["_s"].get("school_name", "")
+        is_unique_name = name_counts.get(school_name, 0) == 1
+        effective_high = (
+            best["match_score"] >= SCORE_HIGH
+            or (best["name_score"] == 1.0 and is_unique_name)
+            or best["addr_score"] >= 0.85
+        )
+
+        if not effective_high:
             review.append({
                 "school_id":          best["school_id"],
                 "school_name_minkou": best["_s"].get("school_name", ""),
@@ -213,12 +244,16 @@ def match_pref(pref: str, schools: list[dict], gaccom_schools: list[dict]) -> tu
 # メイン
 # ─────────────────────────────────────────
 
-def resolve_pref_names(pref_arg: str | None) -> list[str] | None:
+def resolve_pref_names(pref_arg: str | None) -> tuple[list[str] | None, list[str] | None]:
+    """(schools用, gaccom用) のフィルタリストを返す"""
     if not pref_arg:
-        return None
+        return None, None
     if pref_arg in PREF_ALIASES:
-        return PREF_ALIASES[pref_arg]
-    return [pref_arg]
+        return PREF_ALIASES[pref_arg], PREF_ALIASES_GACCOM[pref_arg]
+    # 単一都道府県の場合: 「県」なし→schools、「県」あり→gaccom
+    name_without = pref_arg.rstrip("都道府県")
+    name_with = pref_arg if pref_arg[-1] in "都道府県" else pref_arg + "県"
+    return [name_without], [name_with]
 
 
 def main():
@@ -229,14 +264,14 @@ def main():
                         help="DBに書き込まず結果をコンソールに表示")
     args = parser.parse_args()
 
-    pref_names = resolve_pref_names(args.pref)
+    pref_names, pref_names_gaccom = resolve_pref_names(args.pref)
 
     client = get_client()
 
     with console.status("schools テーブルを取得中..."):
         schools = fetch_schools(client, pref_names)
     with console.status("gaccom_schools テーブルを取得中..."):
-        gaccom = fetch_gaccom_schools(client, pref_names)
+        gaccom = fetch_gaccom_schools(client, pref_names_gaccom)
 
     console.print(f"  minkou: [cyan]{len(schools)}校[/cyan]  gaccom: [cyan]{len(gaccom)}校[/cyan]")
 
@@ -248,7 +283,9 @@ def main():
 
     gaccom_by_pref: dict[str, list] = defaultdict(list)
     for g in gaccom:
-        gaccom_by_pref[g.get("pref_name", "")].append(g)
+        # gaccom の pref_name は「茨城県」形式なので末尾の都道府県を除去してキーを合わせる
+        key = re.sub(r'[都道府県]$', '', g.get("pref_name", ""))
+        gaccom_by_pref[key].append(g)
 
     all_links: list[dict] = []
     all_review: list[dict] = []
@@ -264,8 +301,8 @@ def main():
         all_links.extend(links)
         all_review.extend(review)
 
-        high = sum(1 for l in links if l["match_score"] >= SCORE_HIGH)
-        low  = len(links) - high
+        high = len(links) - len(review)
+        low  = len(review)
         console.print(f"    → 高信頼: [green]{high}件[/green]  要確認: [yellow]{low}件[/yellow]")
 
     # 要レビュー CSV 出力

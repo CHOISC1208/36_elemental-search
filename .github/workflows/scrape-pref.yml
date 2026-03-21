@@ -111,3 +111,11 @@ jobs:
             --pref "${{ github.event.inputs.pref }}" \
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}"
+
+      - name: match_schools - ${{ github.event.inputs.pref }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scripts/match_schools.py \
+            --pref "${{ github.event.inputs.pref }}"
