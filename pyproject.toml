@@ -12,4 +12,6 @@ dependencies = [
     "questionary>=2.1.0",
     "rich>=14.0.0",
     "streamlit>=1.45.0",
+    "jaconv>=0.3.4",
+    "rapidfuzz>=3.9.0",
 ]

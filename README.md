@@ -1,6 +1,6 @@
 # 36_elemental-search
 
-小学校情報（minkou.jp）をスクレイピングして Supabase に格納するプロジェクト。
+minkou.jp と gaccom.jp の小学校情報をスクレイピングして Supabase に格納し、両サイトのデータを名寄せするプロジェクト。
 
 ## ディレクトリ構成
 
@@ -8,35 +8,38 @@
 36_elemental-search/
 ├── .env                              # Supabase接続情報（gitignore済み）
 ├── db/
-│   └── create_tables.sql             # Supabaseテーブル定義SQL
-├── data/raw/                         # スクレイピング結果JSON（gitignore済み）
+│   └── create_tables.sql             # Supabaseテーブル定義SQL（全テーブル）
+├── scripts/
+│   └── match_schools.py              # minkou × gaccom 名寄せスクリプト
 └── scrapers/
-    └── minkou/
-        ├── scraper.py                # minkou.jp スクレイパー本体
-        ├── fetch_locations.py        # 都道府県・市区町村 → DB
-        ├── run.py                    # 名前指定でスクレイプ → DB
-        └── load_to_supabase.py       # 既存JSONファイル → DB
+    ├── minkou/
+    │   ├── scraper.py                # minkou.jp スクレイパー本体
+    │   ├── fetch_locations.py        # 都道府県・市区町村 → DB
+    │   ├── run.py                    # 都道府県指定でスクレイプ → DB
+    │   └── load_to_supabase.py       # 既存JSONファイル → DB
+    └── gaccom/
+        ├── scraper.py                # gaccom.jp スクレイパー本体
+        └── run.py                    # 都道府県指定でスクレイプ → DB
 ```
 
 ---
 
 ## セットアップ
 
-### 1. 仮想環境の有効化
+### 1. 仮想環境の有効化・依存インストール
 
 ```bash
 source .venv/bin/activate
+uv sync
 ```
 
 ### 2. .env の設定
 
-`.env` ファイルに Supabase の接続情報を記入する。
-Supabase ダッシュボード > Settings > API から取得。
+Supabase ダッシュボード > Settings > API から取得して `.env` に記入する。
 
 ```
 SUPABASE_URL=https://xxxxxxxxxx.supabase.co
 SUPABASE_SERVICE_KEY=eyJ...  # service_role キーを使う
-SUPABASE_ANON_KEY=eyJ...
 ```
 
 ### 3. Supabase にテーブルを作成
@@ -44,45 +47,39 @@ SUPABASE_ANON_KEY=eyJ...
 Supabase ダッシュボード > **SQL Editor** で `db/create_tables.sql` の内容を実行する。
 
 作成されるテーブル（スキーマ: `36_elemental-search`）:
-- `prefectures` — 都道府県マスタ
-- `cities` — 市区町村マスタ
-- `schools` — 学校マスタ
-- `school_reviews` — 口コミ
+
+| テーブル | 内容 |
+|---|---|
+| `prefectures` | 都道府県マスタ |
+| `cities` | 市区町村マスタ |
+| `schools` | minkou.jp 学校マスタ |
+| `school_reviews` | minkou.jp 口コミ |
+| `gaccom_schools` | gaccom.jp 学校マスタ |
+| `school_links` | 名寄せ結果（minkou × gaccom） |
 
 > **補足**: カスタムスキーマを使うため、Supabase > Settings > API > **Exposed schemas** に `36_elemental-search` を追加すること。
 
 ---
 
-## 使い方
+## データ収集
 
-### Step 1: 都道府県・市区町村マスタを取得してDBに格納
+### minkou.jp
 
-初回のみ実行。minkou.jp をスクレイピングして `prefectures` / `cities` テーブルを埋める。
+#### Step 1: 都道府県・市区町村マスタを取得
+
+初回のみ実行。`prefectures` / `cities` テーブルを埋める。
 
 ```bash
-# 全都道府県（約47回アクセス、数分かかる）
-python scrapers/minkou/fetch_locations.py
-
-# 特定都道府県のみ
-python scrapers/minkou/fetch_locations.py --pref tokyo
+python scrapers/minkou/fetch_locations.py           # 全都道府県
+python scrapers/minkou/fetch_locations.py --pref tokyo  # 特定都道府県のみ
 ```
 
-### Step 2: 学校・口コミをスクレイピングしてDBに格納
-
-都道府県を指定すると、DBから市区町村一覧を取得して選択UIが起動する（Step 1 完了後）。
+#### Step 2: 学校・口コミをスクレイピング
 
 ```bash
-# 東京都の市区町村一覧を表示して選択
-python scrapers/minkou/run.py --pref 東京都
-
-# スラッグでも可
-python scrapers/minkou/run.py --pref tokyo
-
-# 取得済みの市区町村も選択肢に表示（再取得したいとき）
-python scrapers/minkou/run.py --pref 東京都 --force
-
-# アクセス間隔を変更（デフォルト: 1.5秒）
-python scrapers/minkou/run.py --pref 東京都 --delay 2.0
+python scrapers/minkou/run.py --pref 東京都          # 市区町村選択UIが起動
+python scrapers/minkou/run.py --pref 東京都 --force  # 取得済みも再取得
+python scrapers/minkou/run.py --pref 東京都 --delay 2.0 --workers 2
 ```
 
 起動するとチェックボックスUIが表示される：
@@ -97,30 +94,115 @@ python scrapers/minkou/run.py --pref 東京都 --delay 2.0
 
 取得済みの市区町村は次回起動時にスキップされるため、複数回に分けて実行できる。
 
-### 既存JSONファイルをDBに投入する場合
+#### 既存JSONファイルをDBに投入する場合
 
 ```bash
-# 単一ファイル
 python scrapers/minkou/load_to_supabase.py data/raw/shinjuku.json
-
-# data/raw/ 以下を全部まとめて
-python scrapers/minkou/load_to_supabase.py --all
+python scrapers/minkou/load_to_supabase.py --all   # data/raw/ 以下を全部
 ```
 
 ---
 
-## Supabase 確認クエリ
+### gaccom.jp
+
+```bash
+python scrapers/gaccom/run.py --pref 東京都         # 都道府県名
+python scrapers/gaccom/run.py --pref 13             # pref_cd（JISコード）
+python scrapers/gaccom/run.py --pref 関東            # 関東7都県まとめて
+python scrapers/gaccom/run.py --pref 13 --limit 5   # 5校だけ試す
+python scrapers/gaccom/run.py --list-prefs           # pref_cd 一覧表示
+```
+
+---
+
+## GitHub Actions
+
+| ワークフロー | 内容 |
+|---|---|
+| `fetch-locations.yml` | 市区町村マスタ取得 |
+| `scrape-kanto.yml` | minkou.jp 関東スクレイピング |
+| `scrape-pref.yml` | minkou.jp 都道府県指定スクレイピング |
+| `scrape-gaccom.yml` | gaccom.jp 関東スクレイピング |
+
+いずれも GitHub > Actions タブから手動実行（`workflow_dispatch`）。
+
+---
+
+## 名寄せ（match_schools.py）
+
+`schools`（minkou）と `gaccom_schools`（gaccom）を住所＋学校名の類似度で突き合わせ、結果を `school_links` テーブルに格納する。
+
+### 実行方法
+
+```bash
+# まず dry-run でスコア分布を確認
+python scripts/match_schools.py --pref 関東 --dry-run
+
+# 問題なければ本番実行
+python scripts/match_schools.py --pref 関東
+
+# 全件
+python scripts/match_schools.py
+```
+
+### オプション
+
+| オプション | 内容 |
+|---|---|
+| `--pref` | 都道府県名（例: `東京都` / `関東`）。省略時は全件 |
+| `--dry-run` | DBに書き込まず上位20件をコンソールに表示 |
+
+### スコアリング
+
+住所類似度 × 0.7 + 学校名類似度 × 0.3 で総合スコアを算出。
+
+| スコア | 処理 |
+|---|---|
+| 0.85 以上 | `school_links` に INSERT（高信頼） |
+| 0.60〜0.84 | `school_links` に INSERT ＋ `review_candidates.csv` に出力（要目視確認） |
+| 0.60 未満 | スキップ |
+
+### 出力ファイル
+
+- `review_candidates.csv` — スコア 0.60〜0.84 の要確認ペア一覧
+
+目視確認後、問題ないペアは Supabase で `verified = TRUE` に更新する：
+
+```sql
+UPDATE "36_elemental-search".school_links
+SET verified = TRUE
+WHERE school_id = 'xxx' AND gaccom_id = 'yyy';
+```
+
+---
+
+## 確認クエリ
 
 ```sql
 -- 学校件数
 SELECT COUNT(*) FROM "36_elemental-search".schools;
+SELECT COUNT(*) FROM "36_elemental-search".gaccom_schools;
 
--- 口コミ件数
-SELECT COUNT(*) FROM "36_elemental-search".school_reviews;
+-- 名寄せ結果の信頼度分布
+SELECT
+    CASE
+        WHEN match_score >= 0.85 THEN '高信頼（自動確定）'
+        WHEN match_score >= 0.60 THEN '要確認'
+    END AS tier,
+    COUNT(*) AS cnt
+FROM "36_elemental-search".school_links
+GROUP BY 1;
 
--- 評価上位校
-SELECT school_name, prefecture, city, rating_avg, review_count
-FROM "36_elemental-search".schools
-ORDER BY rating_avg DESC NULLS LAST
-LIMIT 10;
+-- 両サイトのデータを結合して確認
+SELECT
+    s.school_name   AS minkou_name,
+    g.school_name   AS gaccom_name,
+    s.address       AS minkou_addr,
+    g.address       AS gaccom_addr,
+    sl.match_score
+FROM "36_elemental-search".school_links sl
+JOIN "36_elemental-search".schools s        ON sl.school_id = s.school_id
+JOIN "36_elemental-search".gaccom_schools g ON sl.gaccom_id = g.gaccom_id
+ORDER BY sl.match_score DESC
+LIMIT 20;
 ```
