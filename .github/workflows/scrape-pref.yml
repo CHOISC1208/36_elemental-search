@@ -1,10 +1,13 @@
-name: 3) 都道府県指定取得
+name: 3) 都道府県指定取得 (minkou + gaccom)
 
 on:
   workflow_dispatch:
     inputs:
-      pref:
-        description: '都道府県名またはスラッグ（例: 東京都 / tokyo / 大阪府 / osaka）'
+      pref_minkou:
+        description: 'minkou用 都道府県（例: 東京都 / tokyo / 大阪府 / osaka）'
+        required: true
+      pref_gaccom:
+        description: 'gaccom用 都道府県コード（例: 13）※ minkou と同じ都道府県を指定'
         required: true
       delay:
         description: 'アクセス間隔（秒）'
@@ -15,7 +18,7 @@ on:
         required: false
         default: '2'
       force:
-        description: '取得済みの市区町村も再取得する（true / false）'
+        description: 'minkou: 取得済みの市区町村も再取得する（true / false）'
         required: false
         default: 'false'
 
@@ -37,7 +40,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Scrape ${{ github.event.inputs.pref }}
+      - name: minkou - Scrape ${{ github.event.inputs.pref_minkou }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -47,8 +50,18 @@ jobs:
             FORCE_FLAG="--force"
           fi
           uv run python scrapers/minkou/run.py \
-            --pref "${{ github.event.inputs.pref }}" \
+            --pref "${{ github.event.inputs.pref_minkou }}" \
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}" \
             --auto \
             $FORCE_FLAG
+
+      - name: gaccom - Scrape ${{ github.event.inputs.pref_gaccom }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scrapers/gaccom/run.py \
+            --pref "${{ github.event.inputs.pref_gaccom }}" \
+            --delay "${{ github.event.inputs.delay || '2.0' }}" \
+            --workers "${{ github.event.inputs.workers || '2' }}"
