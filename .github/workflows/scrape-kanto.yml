@@ -23,14 +23,21 @@ jobs:
     strategy:
       max-parallel: 1  # 都道府県は順番に処理（サーバー負荷軽減）
       matrix:
-        pref:
-          - ibaraki
-          - tochigi
-          - gunma
-          - saitama
-          - chiba
-          - tokyo
-          - kanagawa
+        include:
+          - pref: ibaraki
+            pref_cd: 8
+          - pref: tochigi
+            pref_cd: 9
+          - pref: gunma
+            pref_cd: 10
+          - pref: saitama
+            pref_cd: 11
+          - pref: chiba
+            pref_cd: 12
+          - pref: tokyo
+            pref_cd: 13
+          - pref: kanagawa
+            pref_cd: 14
 
     steps:
       - uses: actions/checkout@v4
@@ -42,7 +49,7 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Scrape ${{ matrix.pref }}
+      - name: minkou - Scrape ${{ matrix.pref }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
@@ -52,3 +59,13 @@ jobs:
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}" \
             --auto
+
+      - name: gaccom - Scrape ${{ matrix.pref_cd }}
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scrapers/gaccom/run.py \
+            --pref "${{ matrix.pref_cd }}" \
+            --delay "${{ github.event.inputs.delay || '2.0' }}" \
+            --workers "${{ github.event.inputs.workers || '2' }}"

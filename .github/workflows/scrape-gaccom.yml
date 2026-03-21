@@ -1,0 +1,45 @@
+name: 4) gaccom取得
+
+on:
+  workflow_dispatch:
+    inputs:
+      pref:
+        description: '都道府県（pref_cd数値 / 都道府県名 / 関東 / all）'
+        required: true
+        default: '関東'
+      delay:
+        description: 'アクセス間隔（秒）'
+        required: false
+        default: '2.0'
+      workers:
+        description: '並列ワーカー数'
+        required: false
+        default: '2'
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  scrape-gaccom:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Scrape gaccom.jp
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scrapers/gaccom/run.py \
+            --pref "${{ github.event.inputs.pref }}" \
+            --delay "${{ github.event.inputs.delay || '2.0' }}" \
+            --workers "${{ github.event.inputs.workers || '2' }}"
