@@ -272,6 +272,9 @@ def parse_single_review(soup: BeautifulSoup, school_id: str, url: str) -> dict |
         "text_pta": "",
         "text_events": "",
         "text_commute": "",
+        "text_motivation": "",
+        "exam_presence": "",
+        "text_exam": "",
     }
 
     full_text = soup.get_text()
@@ -338,7 +341,14 @@ def parse_single_review(soup: BeautifulSoup, school_id: str, url: str) -> dict |
         "保護者関係(PTA)": "text_pta",
         "イベント": "text_events",
         "登下校方法": "text_commute",
+        "志望動機": "text_motivation",
+        "試験内容": "text_exam",
     }
+
+    # 試験の有無（有り / なし）
+    m = re.search(r"試験の有無[：:\s]*(有り|なし|あり|無し)", full_text)
+    if m:
+        review["exam_presence"] = m.group(1)
     for li in soup.find_all("li"):
         label_tag = li.find(["strong", "h4", "dt"])
         if label_tag:

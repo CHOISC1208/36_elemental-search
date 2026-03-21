@@ -113,6 +113,9 @@ def upsert_reviews(client: Client, reviews: list) -> int:
             "text_pta":        r.get("text_pta"),
             "text_events":     r.get("text_events"),
             "text_commute":    r.get("text_commute"),
+            "text_motivation": r.get("text_motivation"),
+            "exam_presence":   r.get("exam_presence"),
+            "text_exam":       r.get("text_exam"),
         })
 
     if not rows:
