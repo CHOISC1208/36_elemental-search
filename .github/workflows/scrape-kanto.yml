@@ -60,12 +60,3 @@ jobs:
             --workers "${{ github.event.inputs.workers || '2' }}" \
             --auto
 
-      - name: gaccom - Scrape ${{ matrix.pref_cd }}
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          uv run python scrapers/gaccom/run.py \
-            --pref "${{ matrix.pref_cd }}" \
-            --delay "${{ github.event.inputs.delay || '2.0' }}" \
-            --workers "${{ github.event.inputs.workers || '2' }}"
