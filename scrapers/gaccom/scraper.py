@@ -82,52 +82,36 @@ def make_session() -> requests.Session:
     return session
 
 
-def get_soup(url: str, session: requests.Session) -> BeautifulSoup | None:
-    try:
-        resp = session.get(url, headers=HEADERS, timeout=15)
-        resp.raise_for_status()
-        resp.encoding = "utf-8"
-        return BeautifulSoup(resp.text, "html.parser")
-    except requests.RequestException as e:
-        print(f"  [ERROR] {url} → {e}", file=sys.stderr)
-        return None
+def get_soup(url: str, session: requests.Session, retries: int = 3) -> BeautifulSoup | None:
+    for attempt in range(retries):
+        try:
+            if attempt > 0:
+                time.sleep(3 * attempt)
+            resp = session.get(url, headers=HEADERS, timeout=30)
+            resp.raise_for_status()
+            resp.encoding = "utf-8"
+            return BeautifulSoup(resp.text, "html.parser")
+        except requests.RequestException as e:
+            if attempt < retries - 1:
+                print(f"  [RETRY {attempt+1}] {url} → {e}", file=sys.stderr)
+            else:
+                print(f"  [ERROR] {url} → {e}", file=sys.stderr)
+    return None
 
 
 # ─────────────────────────────────────────
 # 学校一覧取得
 # ─────────────────────────────────────────
 
-def _fetch_links_from(list_url: str, session: requests.Session) -> list[str]:
-    """リストページから schools-{id}.html のURLを収集する（ページネーション対応）"""
+def _collect_links(soup, seen: set) -> list[str]:
+    """soupから schools-{id}.html のURLを重複なしで収集する"""
     urls = []
-    seen = set()
-    page = 1
-
-    while True:
-        url = list_url + (f"&page={page}" if page > 1 else "")
-        soup = get_soup(url, session)
-        if soup is None:
-            break
-
-        found = 0
-        for a in soup.find_all("a", href=re.compile(r"/schools-\d+\.html")):
-            href = a.get("href", "")
-            full = href if href.startswith("http") else BASE_URL + href
-            if full not in seen:
-                seen.add(full)
-                urls.append(full)
-                found += 1
-
-        if not found:
-            break
-
-        next_link = soup.find("a", string=re.compile(r"次|next", re.I))
-        if not next_link:
-            next_link = soup.find("a", rel="next")
-        if not next_link:
-            break
-        page += 1
-
+    for a in soup.find_all("a", href=re.compile(r"/schools-\d+\.html")):
+        href = a.get("href", "")
+        full = href if href.startswith("http") else BASE_URL + href
+        if full not in seen:
+            seen.add(full)
+            urls.append(full)
     return urls
 
 
@@ -136,17 +120,31 @@ def get_school_links(pref_cd: int, session: requests.Session) -> list[str]:
     seen = set()
     all_urls = []
 
-    sources = [
-        f"{BASE_URL}/?m=pc&a=page_o_school_list_ps&pref_cd={pref_cd}&kind=1",  # 私立小学校
-        f"{BASE_URL}/?m=pc&a=page_o_school_list_n&pref_cd={pref_cd}&kind=1",   # 国立小学校
-        f"{BASE_URL}/?m=pc&a=page_o_school_list_p2&pref_cd={pref_cd}&build=2&kind=1",  # 公立小学校
-    ]
+    # 1. 公立小学校: 都道府県ページから市区町村URL一覧を取得し各ページをスクレイプ
+    public_pref_url = f"{BASE_URL}/search/p{pref_cd}/public_es/"
+    pref_soup = get_soup(public_pref_url, session)
+    if pref_soup:
+        city_urls = []
+        for a in pref_soup.find_all("a", href=re.compile(rf"/search/p{pref_cd}/c\d+_public_es/")):
+            href = a.get("href", "")
+            full = href if href.startswith("http") else BASE_URL + href
+            if full not in city_urls:
+                city_urls.append(full)
+        for city_url in city_urls:
+            time.sleep(2.0)
+            city_soup = get_soup(city_url, make_session())
+            if city_soup:
+                all_urls.extend(_collect_links(city_soup, seen))
 
-    for src in sources:
-        for url in _fetch_links_from(src, session):
-            if url not in seen:
-                seen.add(url)
-                all_urls.append(url)
+    # 2. 私立小学校
+    private_soup = get_soup(f"{BASE_URL}/search/p{pref_cd}/private_es/", session)
+    if private_soup:
+        all_urls.extend(_collect_links(private_soup, seen))
+
+    # 3. 国立小学校
+    national_soup = get_soup(f"{BASE_URL}/search/p{pref_cd}/national_es/", session)
+    if national_soup:
+        all_urls.extend(_collect_links(national_soup, seen))
 
     return all_urls
 

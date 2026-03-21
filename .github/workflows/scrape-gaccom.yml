@@ -20,23 +20,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
 
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - region: 北海道・東北
-            prefs: "1 2 3 4 5 6 7"
-          - region: 関東
-            prefs: "8 9 10 11 12 13 14"
-          - region: 中部
-            prefs: "15 16 17 18 19 20 21 22 23 24"
-          - region: 近畿
-            prefs: "25 26 27 28 29 30"
-          - region: 中国・四国
-            prefs: "31 32 33 34 35 36 37 38 39"
-          - region: 九州・沖縄
-            prefs: "40 41 42 43 44 45 46 47"
-
     steps:
       - uses: actions/checkout@v4
 
@@ -47,12 +30,12 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Scrape gaccom.jp (${{ matrix.region }})
+      - name: Scrape gaccom.jp (関東)
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          for pref in ${{ matrix.prefs }}; do
+          for pref in 8 9 10 11 12 13 14; do
             uv run python scrapers/gaccom/run.py \
               --pref "$pref" \
               --delay "${{ github.event.inputs.delay || '2.0' }}" \
