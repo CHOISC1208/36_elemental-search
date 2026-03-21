@@ -1,0 +1,53 @@
+name: Scrape minkou.jp
+
+on:
+  workflow_dispatch:
+    inputs:
+      pref:
+        description: '都道府県（例: 東京都 / tokyo / all）'
+        required: false
+        default: 'all'
+      delay:
+        description: 'アクセス間隔（秒）'
+        required: false
+        default: '2.0'
+      workers:
+        description: '並列ワーカー数'
+        required: false
+        default: '2'
+  schedule:
+    # 毎日 JST 3:00 (UTC 18:00) に実行
+    - cron: '0 18 * * *'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 最大6時間
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -e .
+
+      - name: Fetch prefectures & cities (初回のみ / 冪等)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python scrapers/minkou/fetch_locations.py
+
+      - name: Scrape schools & reviews
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          python scrapers/minkou/run.py \
+            --pref "${{ github.event.inputs.pref || 'all' }}" \
+            --delay "${{ github.event.inputs.delay || '2.0' }}" \
+            --workers "${{ github.event.inputs.workers || '2' }}" \
+            --auto

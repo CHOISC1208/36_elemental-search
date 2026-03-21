@@ -191,40 +191,66 @@ def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, 
     console.print(f"  ✓ schools [green]{n_schools}件[/green]  reviews [green]{n_reviews}件[/green]  → 完了")
 
 
+def process_pref(pref_slug: str, pref_name: str, args, client, session: requests.Session):
+    """1都道府県分の処理"""
+    console.print(f"\n[bold]都道府県:[/bold] {pref_name} ({pref_slug})")
+
+    cities = fetch_cities_from_db(pref_slug, client)
+    if not cities:
+        console.print("[red]市区町村がDBにありません。fetch_locations.py を先に実行してください。[/red]")
+        return
+
+    done = sum(1 for c in cities if c["scraped_at"])
+    console.print(f"市区町村: {len(cities)}件  取得済: [green]{done}件[/green]  未取得: [yellow]{len(cities)-done}件[/yellow]\n")
+
+    if args.auto:
+        selected = [c for c in cities if not c["scraped_at"]] if not args.force else cities
+        if not selected:
+            console.print("[green]未取得の市区町村はありません。スキップ。[/green]")
+            return
+        console.print(f"[auto] {len(selected)}件の未取得市区町村を自動選択")
+    else:
+        selected = select_cities(cities, args.force)
+
+    console.print(f"\n[bold]{len(selected)}件[/bold] の市区町村を処理します\n")
+
+    for i, city in enumerate(selected, 1):
+        console.print(f"\n[bold][{i}/{len(selected)}][/bold]", end=" ")
+        scrape_city(city, pref_slug, args.delay, args.workers, client, session)
+
+
 def main():
     parser = argparse.ArgumentParser(description="minkou.jp スクレイピング → Supabase格納")
     parser.add_argument("--pref", required=True,
-                        help="都道府県名またはスラッグ（例: 東京都 / tokyo）")
+                        help="都道府県名またはスラッグ（例: 東京都 / tokyo / all）")
     parser.add_argument("--delay", type=float, default=1.5,
                         help="アクセス間隔（秒、デフォルト: 1.5）")
     parser.add_argument("--workers", type=int, default=3,
                         help="並列ワーカー数（デフォルト: 3、上げすぎ注意）")
     parser.add_argument("--force", action="store_true",
                         help="取得済みの市区町村も選択肢に表示する")
+    parser.add_argument("--auto", action="store_true",
+                        help="対話UIをスキップし、未取得の市区町村を自動選択（CI/CD用）")
     args = parser.parse_args()
 
     client = get_client()
-    session = requests.Session()  # 学校一覧取得用（シングルスレッド）
+    session = requests.Session()
 
-    pref_slug, pref_name = resolve_pref_slug(args.pref, client)
-
-    console.print(f"\n[bold]都道府県:[/bold] {pref_name} ({pref_slug})")
-
-    cities = fetch_cities_from_db(pref_slug, client)
-    if not cities:
-        console.print("[red]市区町村がDBにありません。fetch_locations.py を先に実行してください。[/red]")
-        sys.exit(1)
-
-    # 取得済み件数を表示
-    done = sum(1 for c in cities if c["scraped_at"])
-    console.print(f"市区町村: {len(cities)}件  取得済: [green]{done}件[/green]  未取得: [yellow]{len(cities)-done}件[/yellow]\n")
-
-    selected = select_cities(cities, args.force)
-    console.print(f"\n[bold]{len(selected)}件[/bold] の市区町村を処理します\n")
-
-    for i, city in enumerate(selected, 1):
-        console.print(f"\n[bold][{i}/{len(selected)}][/bold]", end=" ")
-        scrape_city(city, pref_slug, args.delay, args.workers, client, session)
+    if args.pref.lower() == "all":
+        if not args.auto:
+            console.print("[red]--pref all は --auto と組み合わせて使ってください[/red]")
+            sys.exit(1)
+        pref_rows = client.schema(SCHEMA).table("prefectures").select("slug,name").order("slug").execute().data
+        if not pref_rows:
+            console.print("[red]都道府県がDBにありません。fetch_locations.py を先に実行してください。[/red]")
+            sys.exit(1)
+        console.print(f"[bold]全{len(pref_rows)}都道府県[/bold] を順番に処理します\n")
+        for i, row in enumerate(pref_rows, 1):
+            console.rule(f"[bold][{i}/{len(pref_rows)}] {row['name']}[/bold]")
+            process_pref(row["slug"], row["name"], args, client, session)
+    else:
+        pref_slug, pref_name = resolve_pref_slug(args.pref, client)
+        process_pref(pref_slug, pref_name, args, client, session)
 
     console.print("\n[bold green]✅ 全処理完了[/bold green]")
 
