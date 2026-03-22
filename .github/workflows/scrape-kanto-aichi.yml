@@ -12,9 +12,10 @@ on:
         required: false
         default: '3'
       force:
-        description: '取得済みの市区町村も再取得する（true / false）'
+        description: '取得済みの市区町村も再取得する'
         required: false
-        default: 'false'
+        type: boolean
+        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
