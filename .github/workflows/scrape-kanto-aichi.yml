@@ -69,7 +69,7 @@ jobs:
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '3' }}" \
             --auto \
-            --no-reviews \
+            --ratings-only \
             $FORCE_FLAG
 
       - name: gaccom - Scrape ${{ matrix.pref }}

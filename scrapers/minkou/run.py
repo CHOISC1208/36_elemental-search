@@ -123,7 +123,13 @@ def mark_scraped(city_code: str, client):
     client.schema(SCHEMA).table("cities").update({"scraped_at": now}).eq("city_code", city_code).execute()
 
 
-def scrape_one_school(school: dict, delay: float, no_reviews: bool = False) -> tuple[dict, list]:
+REVIEW_TEXT_FIELDS = [
+    "text_overall", "text_policy", "text_class", "text_facility",
+    "text_access", "text_pta", "text_events", "text_commute",
+    "text_motivation", "text_exam", "exam_presence",
+]
+
+def scrape_one_school(school: dict, delay: float, no_reviews: bool = False, ratings_only: bool = False) -> tuple[dict, list]:
     """1校分の詳細・口コミを取得して返す（スレッドごとに独立したsessionを使用）"""
     session = requests.Session()
     sid = school["school_id"]
@@ -140,10 +146,16 @@ def scrape_one_school(school: dict, delay: float, no_reviews: bool = False) -> t
 
     time.sleep(delay)
     reviews = get_all_reviews(sid, session, delay)
+
+    if ratings_only:
+        for r in reviews:
+            for field in REVIEW_TEXT_FIELDS:
+                r[field] = ""
+
     return info, reviews
 
 
-def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, session: requests.Session, no_reviews: bool = False):
+def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, session: requests.Session, no_reviews: bool = False, ratings_only: bool = False):
     city_code = city["city_code"]
     city_name = city["name"]
 
@@ -171,7 +183,7 @@ def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, 
 
         with ThreadPoolExecutor(max_workers=workers) as executor:
             futures = {
-                executor.submit(scrape_one_school, school, delay, no_reviews): school
+                executor.submit(scrape_one_school, school, delay, no_reviews, ratings_only): school
                 for school in schools
             }
             for future in as_completed(futures):
@@ -219,7 +231,7 @@ def process_pref(pref_slug: str, pref_name: str, args, client, session: requests
 
     for i, city in enumerate(selected, 1):
         console.print(f"\n[bold][{i}/{len(selected)}][/bold]", end=" ")
-        scrape_city(city, pref_slug, args.delay, args.workers, client, session, no_reviews=args.no_reviews)
+        scrape_city(city, pref_slug, args.delay, args.workers, client, session, no_reviews=args.no_reviews, ratings_only=args.ratings_only)
 
 
 def main():
@@ -236,6 +248,8 @@ def main():
                         help="対話UIをスキップし、未取得の市区町村を自動選択（CI/CD用）")
     parser.add_argument("--no-reviews", action="store_true",
                         help="口コミを取得しない（学校情報のみ、高速化）")
+    parser.add_argument("--ratings-only", action="store_true",
+                        help="口コミのカテゴリ評価のみ保存し、テキスト本文は保存しない")
     args = parser.parse_args()
 
     client = get_client()
