@@ -1,26 +1,12 @@
-name: 4) 関東+愛知 学校情報取得 (口コミなし)
+name: 4) 関東+愛知 カテゴリ評価再取得
 
 on:
   workflow_dispatch:
-    inputs:
-      delay:
-        description: 'アクセス間隔（秒）'
-        required: false
-        default: '2.0'
-      workers:
-        description: '並列ワーカー数'
-        required: false
-        default: '3'
-      force:
-        description: '取得済みの市区町村も再取得する'
-        required: false
-        type: boolean
-        default: false
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
-# 関東7都県 + 愛知
+# 関東7都県 + 愛知: minkou カテゴリ評価のみ再取得（テキスト本文なし、強制再取得）
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -28,23 +14,7 @@ jobs:
     strategy:
       max-parallel: 1
       matrix:
-        include:
-          - pref: 茨城県
-            pref_slug: ibaraki
-          - pref: 栃木県
-            pref_slug: tochigi
-          - pref: 群馬県
-            pref_slug: gunma
-          - pref: 埼玉県
-            pref_slug: saitama
-          - pref: 千葉県
-            pref_slug: chiba
-          - pref: 東京都
-            pref_slug: tokyo
-          - pref: 神奈川県
-            pref_slug: kanagawa
-          - pref: 愛知県
-            pref_slug: aichi
+        pref: [茨城県, 栃木県, 群馬県, 埼玉県, 千葉県, 東京都, 神奈川県, 愛知県]
 
     steps:
       - uses: actions/checkout@v4
@@ -56,44 +26,13 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: minkou - Scrape ${{ matrix.pref }} (学校情報のみ)
+      - name: minkou - ${{ matrix.pref }} カテゴリ評価取得
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: |
-          FORCE_FLAG=""
-          if [ "${{ github.event.inputs.force }}" = "true" ]; then
-            FORCE_FLAG="--force"
-          fi
           uv run python scrapers/minkou/run.py \
             --pref "${{ matrix.pref }}" \
-            --delay "${{ github.event.inputs.delay || '2.0' }}" \
-            --workers "${{ github.event.inputs.workers || '3' }}" \
             --auto \
-            --ratings-only \
-            $FORCE_FLAG
-
-      - name: gaccom - Scrape ${{ matrix.pref }}
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          uv run python scrapers/gaccom/run.py \
-            --pref "${{ matrix.pref }}" \
-            --delay "${{ github.event.inputs.delay || '2.0' }}" \
-            --workers "${{ github.event.inputs.workers || '3' }}"
-
-      - name: fix_prefecture - prefecture フィールド正規化
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          uv run python scrapers/minkou/fix_prefecture.py
-
-      - name: match_schools - ${{ matrix.pref }}
-        env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
-        run: |
-          uv run python scripts/match_schools.py \
-            --pref "${{ matrix.pref }}"
+            --force \
+            --ratings-only

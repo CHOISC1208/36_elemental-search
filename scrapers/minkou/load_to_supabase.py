@@ -83,7 +83,7 @@ def upsert_schools(client: Client, schools: list) -> int:
     return len(rows)
 
 
-def upsert_reviews(client: Client, reviews: list) -> int:
+def upsert_reviews(client: Client, reviews: list, ratings_only: bool = False) -> int:
     if not reviews:
         return 0
 
@@ -93,41 +93,55 @@ def upsert_reviews(client: Client, reviews: list) -> int:
         if not review_url:
             continue  # URLなしはスキップ
 
-        rows.append({
-            "school_id":       r.get("school_id"),
-            "review_url":      review_url,
-            "poster_type":     r.get("poster_type"),
-            "enrollment_year": clean_int(r.get("enrollment_year")),
-            "post_date":       r.get("post_date"),
-            "title":           r.get("title"),
-            "rating_overall":  clean_numeric(r.get("rating_overall"), 1),
-            "rating_policy":   clean_numeric(r.get("rating_policy"), 1),
-            "rating_class":    clean_numeric(r.get("rating_class"), 1),
-            "rating_teacher":  clean_numeric(r.get("rating_teacher"), 1),
-            "rating_facility": clean_numeric(r.get("rating_facility"), 1),
-            "rating_access":   clean_numeric(r.get("rating_access"), 1),
-            "rating_pta":      clean_numeric(r.get("rating_pta"), 1),
-            "rating_events":   clean_numeric(r.get("rating_events"), 1),
-            "text_overall":    r.get("text_overall"),
-            "text_policy":     r.get("text_policy"),
-            "text_class":      r.get("text_class"),
-            "text_facility":   r.get("text_facility"),
-            "text_access":     r.get("text_access"),
-            "text_pta":        r.get("text_pta"),
-            "text_events":     r.get("text_events"),
-            "text_commute":    r.get("text_commute"),
-            "text_motivation": r.get("text_motivation"),
-            "exam_presence":   r.get("exam_presence"),
-            "text_exam":       r.get("text_exam"),
-        })
+        if ratings_only:
+            # 評価フィールドのみ（テキストは含めないので既存データを上書きしない）
+            rows.append({
+                "school_id":       r.get("school_id"),
+                "review_url":      review_url,
+                "rating_overall":  clean_numeric(r.get("rating_overall"), 1),
+                "rating_policy":   clean_numeric(r.get("rating_policy"), 1),
+                "rating_class":    clean_numeric(r.get("rating_class"), 1),
+                "rating_teacher":  clean_numeric(r.get("rating_teacher"), 1),
+                "rating_facility": clean_numeric(r.get("rating_facility"), 1),
+                "rating_access":   clean_numeric(r.get("rating_access"), 1),
+                "rating_pta":      clean_numeric(r.get("rating_pta"), 1),
+                "rating_events":   clean_numeric(r.get("rating_events"), 1),
+            })
+        else:
+            rows.append({
+                "school_id":       r.get("school_id"),
+                "review_url":      review_url,
+                "poster_type":     r.get("poster_type"),
+                "enrollment_year": clean_int(r.get("enrollment_year")),
+                "post_date":       r.get("post_date"),
+                "title":           r.get("title"),
+                "rating_overall":  clean_numeric(r.get("rating_overall"), 1),
+                "rating_policy":   clean_numeric(r.get("rating_policy"), 1),
+                "rating_class":    clean_numeric(r.get("rating_class"), 1),
+                "rating_teacher":  clean_numeric(r.get("rating_teacher"), 1),
+                "rating_facility": clean_numeric(r.get("rating_facility"), 1),
+                "rating_access":   clean_numeric(r.get("rating_access"), 1),
+                "rating_pta":      clean_numeric(r.get("rating_pta"), 1),
+                "rating_events":   clean_numeric(r.get("rating_events"), 1),
+                "text_overall":    r.get("text_overall"),
+                "text_policy":     r.get("text_policy"),
+                "text_class":      r.get("text_class"),
+                "text_facility":   r.get("text_facility"),
+                "text_access":     r.get("text_access"),
+                "text_pta":        r.get("text_pta"),
+                "text_events":     r.get("text_events"),
+                "text_commute":    r.get("text_commute"),
+                "text_motivation": r.get("text_motivation"),
+                "exam_presence":   r.get("exam_presence"),
+                "text_exam":       r.get("text_exam"),
+            })
 
     if not rows:
         return 0
 
-    # review_urlが重複したら何もしない（ignoreDuplicates）
     resp = (
         client.schema("36_elemental-search").table("school_reviews")
-        .upsert(rows, on_conflict="review_url", ignore_duplicates=True)
+        .upsert(rows, on_conflict="review_url", ignore_duplicates=not ratings_only)
         .execute()
     )
     return len(rows)

@@ -200,7 +200,7 @@ def scrape_city(city: dict, pref_slug: str, delay: float, workers: int, client, 
     # Supabase格納
     with console.status("Supabaseに格納中..."):
         n_schools = upsert_schools(client, all_schools)
-        n_reviews = upsert_reviews(client, all_reviews)
+        n_reviews = upsert_reviews(client, all_reviews, ratings_only=ratings_only)
         mark_scraped(city_code, client)
 
     console.print(f"  ✓ schools [green]{n_schools}件[/green]  reviews [green]{n_reviews}件[/green]  → 完了")
