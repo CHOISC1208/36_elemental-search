@@ -12,6 +12,7 @@ import { School } from '@/types/school'
 
 const DEFAULT_PARAMS: SearchParams = {
   prefecture_slug: '',
+  prefecture_name: '',
   city_code: '',
   school_name: '',
   school_type: '',

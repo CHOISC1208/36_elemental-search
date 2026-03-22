@@ -311,27 +311,16 @@ def parse_single_review(soup: BeautifulSoup, school_id: str, url: str) -> dict |
             review["rating_overall"] = t
             break
 
-    # カテゴリ別スコア
-    scores_node = soup.find(string=re.compile(r"方針・理念\s*[\d\-]"))
-    if scores_node:
-        parts = re.split(r"[｜|]", scores_node)
-        score_map = {
-            "方針・理念": "rating_policy",
-            "授業": "rating_class",
-            "先生": "rating_teacher",
-            "施設・セキュリティ": "rating_facility",
-            "アクセス・立地": "rating_access",
-            "保護者関係(PTA)": "rating_pta",
-            "イベント": "rating_events",
-        }
-        for part in parts:
-            part = part.strip()
-            for label, field in score_map.items():
-                if part.startswith(label):
-                    rest = part[len(label):].strip()
-                    m2 = re.search(r"[\d\-]+", rest)
-                    if m2:
-                        review[field] = m2.group(0)
+    # カテゴリ別スコア（<div class="mod-reviewItem"> 内の <span class="number"> から取得）
+    SCORE_FIELDS = ["rating_policy", "rating_class", "rating_teacher", "rating_facility", "rating_access", "rating_pta", "rating_events"]
+    item_div = soup.find("div", class_="mod-reviewItem")
+    if item_div:
+        spans = item_div.find_all("span", class_="number")
+        for i, span in enumerate(spans):
+            if i < len(SCORE_FIELDS):
+                val = span.get_text(strip=True)
+                if re.match(r"^\d+$", val):
+                    review[SCORE_FIELDS[i]] = val
 
     # カテゴリ別テキスト本文
     text_map = {

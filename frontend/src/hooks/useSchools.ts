@@ -16,8 +16,8 @@ export function useSchools(params: SearchParams) {
         'school_id, school_name, furigana, prefecture, city, address, nearest_station, school_type, uniform, lunch, events, tuition, selection, selection_method, rating_avg, review_count'
       )
 
-    if (params.prefecture_slug) {
-      query = query.eq('prefecture', params.prefecture_slug)
+    if (params.prefecture_name) {
+      query = query.eq('prefecture', params.prefecture_name)
     }
     if (params.city_code) {
       query = query.eq('city', params.city_code)
@@ -46,6 +46,7 @@ export function useSchools(params: SearchParams) {
       setLoading(false)
     })
   }, [
+    params.prefecture_name,
     params.prefecture_slug,
     params.city_code,
     params.school_name,

@@ -53,6 +53,7 @@ export interface City {
 
 export interface SearchParams {
   prefecture_slug: string
+  prefecture_name: string
   city_code: string
   school_name: string
   school_type: SchoolType | ''

@@ -5,6 +5,7 @@ import { usePrefectures, usePrefCities } from '@/hooks/usePrefCities'
 
 const DEFAULT_PARAMS: SearchParams = {
   prefecture_slug: '',
+  prefecture_name: '',
   city_code: '',
   school_name: '',
   school_type: '',
@@ -29,7 +30,12 @@ export function SearchBox({ onSearch }: SearchBoxProps) {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <select
           value={params.prefecture_slug}
-          onChange={(e) => set({ prefecture_slug: e.target.value, city_code: '' })}
+          onChange={(e) => {
+            const slug = e.target.value
+            const pref = prefectures.find((p) => p.slug === slug)
+            const name = pref ? pref.name.replace(/[都道府県]$/, '') : ''
+            set({ prefecture_slug: slug, prefecture_name: name, city_code: '' })
+          }}
           className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
         >
           <option value="">都道府県を選択</option>
