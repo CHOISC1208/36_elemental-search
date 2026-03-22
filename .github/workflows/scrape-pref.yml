@@ -75,6 +75,9 @@ jobs:
   scrape-pref:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: crawler
 
     steps:
       - uses: actions/checkout@v4

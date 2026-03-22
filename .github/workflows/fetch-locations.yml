@@ -15,6 +15,9 @@ jobs:
   fetch-locations:
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: crawler
 
     steps:
       - uses: actions/checkout@v4

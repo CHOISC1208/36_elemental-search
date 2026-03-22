@@ -11,6 +11,9 @@ jobs:
   scrape:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: crawler
     strategy:
       max-parallel: 1
       matrix:

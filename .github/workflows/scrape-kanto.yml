@@ -20,6 +20,9 @@ jobs:
   scrape-kanto:
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    defaults:
+      run:
+        working-directory: crawler
     strategy:
       max-parallel: 1  # 都道府県は順番に処理（サーバー負荷軽減）
       matrix:
@@ -59,4 +62,3 @@ jobs:
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}" \
             --auto
-
