@@ -3,15 +3,17 @@ import Link from 'next/link'
 import { School } from '@/types/school'
 import { Badge } from '@/components/ui/Badge'
 import { StarRating } from '@/components/ui/StarRating'
+import { highlightText } from '@/utils/highlight'
 
 interface SchoolCardProps {
   school: School
   isInCompare: boolean
   onToggleCompare: (school: School) => void
   canAdd: boolean
+  searchKeyword?: string
 }
 
-export function SchoolCard({ school, isInCompare, onToggleCompare, canAdd }: SchoolCardProps) {
+export function SchoolCard({ school, isInCompare, onToggleCompare, canAdd, searchKeyword = '' }: SchoolCardProps) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
@@ -26,7 +28,7 @@ export function SchoolCard({ school, isInCompare, onToggleCompare, canAdd }: Sch
             )}
           </div>
           <Link href={`/schools/${school.school_id}`}>
-            <h3 className="font-bold text-gray-900 hover:text-brand truncate">{school.school_name}</h3>
+            <h3 className="font-bold text-gray-900 hover:text-brand truncate">{highlightText(school.school_name, searchKeyword)}</h3>
           </Link>
           <p className="text-sm text-gray-500 mt-0.5">{school.prefecture} {school.city}</p>
           {school.nearest_station && (

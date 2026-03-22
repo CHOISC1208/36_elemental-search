@@ -23,7 +23,9 @@ export function useSchools(params: SearchParams) {
       query = query.eq('city', params.city_code)
     }
     if (params.school_name) {
-      query = query.ilike('school_name', `%${params.school_name}%`)
+      query = query.or(
+        `school_name.ilike.%${params.school_name}%,furigana.ilike.%${params.school_name}%`
+      )
     }
     if (params.school_type) {
       query = query.eq('school_type', params.school_type)
