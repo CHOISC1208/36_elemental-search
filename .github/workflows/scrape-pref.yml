@@ -112,6 +112,13 @@ jobs:
             --delay "${{ github.event.inputs.delay || '2.0' }}" \
             --workers "${{ github.event.inputs.workers || '2' }}"
 
+      - name: fix_prefecture - prefecture フィールド正規化
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          uv run python scrapers/minkou/fix_prefecture.py
+
       - name: match_schools - ${{ github.event.inputs.pref }}
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}

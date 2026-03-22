@@ -135,13 +135,26 @@ def get_client():
     return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
+def fetch_all(query) -> list[dict]:
+    """ページネーションで全件取得"""
+    all_rows = []
+    offset = 0
+    while True:
+        r = query.range(offset, offset + 999).execute()
+        all_rows.extend(r.data)
+        if len(r.data) < 1000:
+            break
+        offset += 1000
+    return all_rows
+
+
 def fetch_schools(client, pref_names: list[str] | None) -> list[dict]:
     q = client.schema(SCHEMA).table("schools").select(
         "school_id, school_name, address, prefecture, city"
     )
     if pref_names:
         q = q.in_("prefecture", pref_names)
-    return q.execute().data
+    return fetch_all(q)
 
 
 def fetch_gaccom_schools(client, pref_names: list[str] | None) -> list[dict]:
@@ -150,7 +163,7 @@ def fetch_gaccom_schools(client, pref_names: list[str] | None) -> list[dict]:
     )
     if pref_names:
         q = q.in_("pref_name", pref_names)
-    return q.execute().data
+    return fetch_all(q)
 
 
 def upsert_links(client, rows: list[dict]):
