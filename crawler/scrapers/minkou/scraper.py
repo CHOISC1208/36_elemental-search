@@ -48,6 +48,12 @@ PREF_SLUGS = {
     "宮崎": "miyazaki", "鹿児島": "kagoshima", "沖縄": "okinawa",
 }
 
+# スラッグ → 都道府県名（接尾辞なし）の逆引きマップ
+SLUG_TO_PREF = {v: k for k, v in PREF_SLUGS.items()}
+
+# 住所に混入する地図UI テキストを除去するパターン
+_MAP_TEXT_RE = re.compile(r'\s*(ここに地図が表示されます|地図を見る|地図を閉じる).*', re.DOTALL)
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
@@ -211,7 +217,14 @@ def parse_school_info(soup: BeautifulSoup, school_id: str, school_url: str) -> d
                 info["city"] = text
         elif re.search(rf"/primary/search/\w+/$", href):
             if not info["prefecture"]:
-                info["prefecture"] = text
+                # URLスラッグから正確な都道府県名を取得（リンクテキストに「の小学校」等が混入するため）
+                slug_m = re.search(r"/primary/search/(\w+)/$", href)
+                if slug_m and slug_m.group(1) in SLUG_TO_PREF:
+                    info["prefecture"] = SLUG_TO_PREF[slug_m.group(1)]
+                else:
+                    # フォールバック: テキストから都道府県部分のみ抽出
+                    pref_m = re.match(r"(北海道|.+?[都道府県])", text)
+                    info["prefecture"] = re.sub(r"[都道府県]$", "", pref_m.group(1)) if pref_m else text
 
     # 総合評価（数値テキストを探す）
     for node in soup.find_all(string=re.compile(r"^\s*\d\.\d{1,2}\s*$")):
@@ -234,7 +247,7 @@ def parse_school_info(soup: BeautifulSoup, school_id: str, school_url: str) -> d
             continue
         key = cells[0].get_text(strip=True)
         val = cells[1].get_text(" ", strip=True)
-        if "所在地" in key:     info["address"] = val
+        if "所在地" in key:     info["address"] = _MAP_TEXT_RE.sub("", val).strip()
         elif "最寄駅" in key:   info["nearest_station"] = val
         elif "制服" in key:     info["uniform"] = val
         elif "給食" in key:     info["lunch"] = val

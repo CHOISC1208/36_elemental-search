@@ -8,6 +8,8 @@ const SPEC_ROWS: { label: string; key: keyof School }[] = [
   { label: '種別', key: 'school_type' },
   { label: '所在地', key: 'address' },
   { label: '最寄駅', key: 'nearest_station' },
+  { label: '児童数', key: 'student_count' },
+  { label: '教職員数', key: 'teacher_count' },
   { label: '給食', key: 'lunch' },
   { label: '制服', key: 'uniform' },
   { label: '行事', key: 'events' },

@@ -27,8 +27,28 @@ export function useSchoolDetail(schoolId: string) {
         )
         .eq('school_id', schoolId)
         .order('scraped_at', { ascending: false }),
-    ]).then(([schoolRes, reviewsRes]) => {
-      setSchool(schoolRes.data)
+      supabase
+        .schema(SCHEMA)
+        .from('school_links')
+        .select('match_score, gaccom_schools(student_count, teacher_count, linked_jhs)')
+        .eq('school_id', schoolId)
+        .order('match_score', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]).then(([schoolRes, reviewsRes, gaccomRes]) => {
+      let schoolData = schoolRes.data
+      if (schoolData && gaccomRes.data) {
+        const g = (gaccomRes.data.gaccom_schools as unknown) as { student_count: number | null; teacher_count: number | null; linked_jhs: string | null } | null
+        if (g) {
+          schoolData = {
+            ...schoolData,
+            student_count: g.student_count,
+            teacher_count: g.teacher_count,
+            linked_jhs: schoolData.linked_jhs ?? g.linked_jhs,
+          }
+        }
+      }
+      setSchool(schoolData)
       setReviews(reviewsRes.data ?? [])
       setLoading(false)
     })

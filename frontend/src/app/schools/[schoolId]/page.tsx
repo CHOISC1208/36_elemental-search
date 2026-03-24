@@ -6,6 +6,7 @@ import { useSchoolDetail } from '@/hooks/useSchoolDetail'
 import { SchoolHero } from '@/components/school/SchoolHero'
 import { RatingRadar } from '@/components/school/RatingRadar'
 import { SchoolSpecs } from '@/components/school/SchoolSpecs'
+import { SchoolMap } from '@/components/school/SchoolMap'
 import { ReviewList } from '@/components/school/ReviewList'
 import { ScoreBar } from '@/components/ui/ScoreBar'
 
@@ -85,7 +86,12 @@ export default function SchoolDetailPage() {
           </div>
         )}
 
-        {tab === 'info' && <SchoolSpecs school={school} />}
+        {tab === 'info' && (
+          <>
+            <SchoolSpecs school={school} />
+            <SchoolMap schoolName={school.school_name} address={school.address} />
+          </>
+        )}
 
         {tab === 'jhs' && (
           <div className="py-4">

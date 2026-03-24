@@ -54,10 +54,13 @@ export interface City {
 export interface SearchParams {
   prefecture_slug: string
   prefecture_name: string
-  city_code: string
+  cities: string[]
   school_name: string
   school_type: SchoolType | ''
   has_lunch: boolean
   has_uniform: boolean
+  nearest_station: string
+  has_reviews: boolean
+  has_gaccom: boolean
   sort: 'rating' | 'reviews' | 'station'
 }
