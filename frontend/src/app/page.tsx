@@ -1,15 +1,12 @@
 'use client'
 import { useState } from 'react'
-import { SearchParams } from '@/types/school'
-import { SearchBox, DEFAULT_SEARCH_PARAMS } from '@/components/search/SearchBox'
-import { FilterChips } from '@/components/search/FilterChips'
-import { PopularAreas } from '@/components/search/PopularAreas'
+import { SchoolSearchForm } from '@/components/search/SchoolSearchForm'
 import { SchoolTable } from '@/components/school/SchoolTable'
 import { SchoolSidePeek } from '@/components/school/SchoolSidePeek'
 import { CompareBar } from '@/components/compare/CompareBar'
 import { ReviewSearchBox } from '@/components/search/ReviewSearchBox'
 import { ReviewSearchResults } from '@/components/search/ReviewSearchResults'
-import { useSchools } from '@/hooks/useSchools'
+import { useSchoolSearch, SchoolSearchQuery, SCHOOL_SEARCH_PAGE_SIZE } from '@/hooks/useSchoolSearch'
 import { useReviewSearch, ReviewSearchParams } from '@/hooks/useReviewSearch'
 import { useCompareStore } from '@/store/compareStore'
 import { School } from '@/types/school'
@@ -17,49 +14,37 @@ import { School } from '@/types/school'
 type SearchMode = 'school' | 'review'
 
 export default function HomePage() {
-  const [mode, setMode] = useState<SearchMode>('school')
-  const [params, setParams] = useState<SearchParams>(DEFAULT_SEARCH_PARAMS)
-  const [searched, setSearched] = useState(false)
+  const [mode, setMode]           = useState<SearchMode>('school')
+  const [query, setQuery]         = useState<SchoolSearchQuery | null>(null)
+  const [page, setPage]           = useState(1)
+  const [sidePeekId, setSidePeekId] = useState<string | null>(null)
   const [reviewKeyword, setReviewKeyword] = useState('')
-  const [sidePeekSchoolId, setSidePeekSchoolId] = useState<string | null>(null)
 
-  const { schools, loading } = useSchools(
-    searched ? params : { ...DEFAULT_SEARCH_PARAMS, prefecture_slug: 'NONE' }
-  )
-  const { results, loading: reviewLoading, searched: reviewSearched, search: searchReviews } = useReviewSearch()
+  const { schools, total, loading }   = useSchoolSearch(query, page)
+  const { results, loading: rvLoading, searched: rvSearched, search: searchReviews } = useReviewSearch()
   const { schools: compareList, add, remove, canAdd } = useCompareStore()
 
-  const handleSearch = (p: SearchParams) => { setParams(p); setSearched(true) }
+  const totalPages = Math.ceil(total / SCHOOL_SEARCH_PAGE_SIZE)
 
-  const handleRemoveFilter = (key: keyof SearchParams, value?: string) => {
-    let next: SearchParams
-    if (key === 'cities' && value) {
-      next = { ...params, cities: params.cities.filter((c) => c !== value) }
-    } else if (key === 'has_lunch' || key === 'has_uniform' || key === 'has_reviews' || key === 'has_gaccom') {
-      next = { ...params, [key]: false }
-    } else {
-      next = { ...params, [key]: '' }
-    }
-    setParams(next)
-    if (searched) setSearched(true)
+  const handleSearch = (q: SchoolSearchQuery) => {
+    setQuery(q)
+    setPage(1)
+    setSidePeekId(null)
   }
 
   const handleToggleCompare = (school: School) => {
-    if (compareList.some((s) => s.school_id === school.school_id)) {
-      remove(school.school_id)
-    } else {
-      add(school)
-    }
+    if (compareList.some(s => s.school_id === school.school_id)) remove(school.school_id)
+    else add(school)
   }
 
   return (
-    <div>
-      {/* モード切替タブ */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-lg p-1 lg:hidden">
+    <div className="space-y-4">
+      {/* ── モード切替タブ ── */}
+      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
         <button
           onClick={() => setMode('school')}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            mode === 'school' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+            mode === 'school' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           学校で探す
@@ -67,97 +52,138 @@ export default function HomePage() {
         <button
           onClick={() => setMode('review')}
           className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            mode === 'review' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
+            mode === 'review' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
           }`}
         >
           口コミで探す
         </button>
       </div>
 
-      {/* PC: 2カラムレイアウト */}
-      <div className="lg:grid lg:grid-cols-[340px_1fr] lg:gap-6 lg:items-start">
+      {/* ── 学校検索モード ── */}
+      {mode === 'school' && (
+        <>
+          {/* ①②③ 検索フォーム */}
+          <SchoolSearchForm onSearch={handleSearch} />
 
-        {/* 左カラム: 検索パネル */}
-        <div className="lg:sticky lg:top-6 space-y-3">
-          {/* PCではタブをここに */}
-          <div className="hidden lg:flex gap-1 bg-gray-100 rounded-lg p-1">
-            <button
-              onClick={() => setMode('school')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                mode === 'school' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              学校で探す
-            </button>
-            <button
-              onClick={() => setMode('review')}
-              className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-                mode === 'review' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'
-              }`}
-            >
-              口コミで探す
-            </button>
-          </div>
-
-          {mode === 'school' && (
-            <>
-              <SearchBox onSearch={handleSearch} />
-              <FilterChips params={params} onRemove={(key, value) => handleRemoveFilter(key, value)} />
-            </>
+          {/* ④ 検索結果 */}
+          {!query && (
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+              <span className="text-4xl">🏫</span>
+              <p className="text-sm">条件を設定して「検索」を押してください</p>
+            </div>
           )}
 
-          {mode === 'review' && (
-            <ReviewSearchBox onSearch={(p: ReviewSearchParams) => { setReviewKeyword(p.keyword); searchReviews(p) }} />
-          )}
-        </div>
-
-        {/* 右カラム: 結果 */}
-        <div className="mt-4 lg:mt-0">
-          {mode === 'school' && (
-            <>
-              {!searched && (
-                <PopularAreas onSelect={(p) => handleSearch({ ...DEFAULT_SEARCH_PARAMS, ...p })} />
-              )}
-              {searched && (
-                <>
-                  <p className="text-sm text-gray-600 mb-3">
-                    {loading ? '検索中...' : `${schools.length}件`}
-                  </p>
-                  <SchoolTable
-                    schools={schools}
-                    selectedSchoolId={sidePeekSchoolId}
-                    onRowClick={(s) => setSidePeekSchoolId(
-                      s.school_id === sidePeekSchoolId ? null : s.school_id
-                    )}
-                    compareList={compareList}
-                    onToggleCompare={handleToggleCompare}
-                    canAdd={canAdd}
-                  />
-                  {!loading && schools.length === 0 && (
-                    <p className="text-center text-gray-400 py-8">該当する学校が見つかりませんでした</p>
+          {query && (
+            <div>
+              {/* 件数・条件ラベル */}
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm text-gray-600 font-medium">
+                  {loading ? '検索中...' : `検索結果 ${total.toLocaleString()} 件`}
+                  {!loading && query.radius_km && (
+                    <span className="ml-2 text-xs text-brand font-normal">
+                      半径 {query.radius_km}km・距離順
+                    </span>
                   )}
-                </>
-              )}
-            </>
-          )}
+                </p>
+                {!loading && total > 0 && !query.radius_km && (
+                  <p className="text-xs text-gray-400">
+                    {page} / {totalPages} ページ
+                  </p>
+                )}
+              </div>
 
-          {mode === 'review' && (
+              {/* テーブル */}
+              <SchoolTable
+                schools={schools}
+                selectedSchoolId={sidePeekId}
+                onRowClick={s => setSidePeekId(s.school_id === sidePeekId ? null : s.school_id)}
+                compareList={compareList}
+                onToggleCompare={handleToggleCompare}
+                canAdd={canAdd}
+              />
+
+              {/* 0件メッセージ */}
+              {!loading && total === 0 && (
+                <p className="text-center text-gray-400 py-10">
+                  該当する学校が見つかりませんでした
+                </p>
+              )}
+
+              {/* ページネーション（半径検索時は非表示） */}
+              {!query.radius_km && totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-5">
+                  <button
+                    onClick={() => { setPage(p => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    disabled={page === 1}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                  >
+                    ← 前へ
+                  </button>
+
+                  {/* ページ番号（前後2ページ） */}
+                  {Array.from({ length: totalPages }, (_, i) => i + 1)
+                    .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 2)
+                    .reduce<(number | '…')[]>((acc, n, idx, arr) => {
+                      if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push('…')
+                      acc.push(n)
+                      return acc
+                    }, [])
+                    .map((item, idx) =>
+                      item === '…' ? (
+                        <span key={`ellipsis-${idx}`} className="text-gray-400 text-sm px-1">…</span>
+                      ) : (
+                        <button
+                          key={item}
+                          onClick={() => { setPage(item as number); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                          className={`w-9 h-9 text-sm rounded-lg border transition-colors ${
+                            page === item
+                              ? 'bg-brand text-white border-brand'
+                              : 'border-gray-300 text-gray-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          {item}
+                        </button>
+                      )
+                    )}
+
+                  <button
+                    onClick={() => { setPage(p => Math.min(totalPages, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }) }}
+                    disabled={page === totalPages}
+                    className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-50 transition-colors"
+                  >
+                    次へ →
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── 口コミ検索モード ── */}
+      {mode === 'review' && (
+        <div className="lg:grid lg:grid-cols-[340px_1fr] lg:gap-6 lg:items-start">
+          <div className="lg:sticky lg:top-6">
+            <ReviewSearchBox
+              onSearch={(p: ReviewSearchParams) => {
+                setReviewKeyword(p.keyword)
+                searchReviews(p)
+              }}
+            />
+          </div>
+          <div className="mt-4 lg:mt-0">
             <ReviewSearchResults
               results={results}
-              loading={reviewLoading}
-              searched={reviewSearched}
+              loading={rvLoading}
+              searched={rvSearched}
               keyword={reviewKeyword}
             />
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       <CompareBar />
-
-      <SchoolSidePeek
-        schoolId={sidePeekSchoolId}
-        onClose={() => setSidePeekSchoolId(null)}
-      />
+      <SchoolSidePeek schoolId={sidePeekId} onClose={() => setSidePeekId(null)} />
     </div>
   )
 }

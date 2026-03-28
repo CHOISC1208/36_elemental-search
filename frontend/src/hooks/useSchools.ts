@@ -32,6 +32,58 @@ export function useSchools(params: SearchParams) {
 
   useEffect(() => {
     setLoading(true)
+
+    // ── 半径検索モード ──────────────────────────────────────────
+    if (params.center_lat !== null && params.center_lng !== null && params.radius_km !== null) {
+      supabase
+        .schema(SCHEMA)
+        .rpc('schools_within_radius', {
+          center_lat: params.center_lat,
+          center_lng: params.center_lng,
+          radius_km: params.radius_km,
+        })
+        .then(({ data }) => {
+          let results: School[] = (data ?? []) as School[]
+
+          // クライアントサイドで追加フィルター
+          if (params.school_name) {
+            const q = params.school_name.toLowerCase()
+            results = results.filter(
+              (s) =>
+                s.school_name.toLowerCase().includes(q) ||
+                (s.furigana ?? '').toLowerCase().includes(q)
+            )
+          }
+          if (params.school_type) {
+            results = results.filter((s) => s.school_type === params.school_type)
+          }
+          if (params.has_lunch) {
+            results = results.filter((s) => s.lunch != null)
+          }
+          if (params.has_uniform) {
+            results = results.filter((s) => s.uniform != null)
+          }
+          if (params.nearest_station) {
+            const q = params.nearest_station.toLowerCase()
+            results = results.filter((s) =>
+              (s.nearest_station ?? '').toLowerCase().includes(q)
+            )
+          }
+          if (params.has_reviews) {
+            results = results.filter((s) => s.review_count > 0)
+          }
+          if (params.has_gaccom && gaccomIds.current.size > 0) {
+            results = results.filter((s) => gaccomIds.current.has(s.school_id))
+          }
+
+          // 半径検索は距離順固定（RPC が distance_km 昇順で返す）
+          setSchools(results.slice(0, 100))
+          setLoading(false)
+        })
+      return
+    }
+
+    // ── 通常検索モード ───────────────────────────────────────────
     let query = supabase
       .schema(SCHEMA)
       .from('schools')
@@ -97,6 +149,9 @@ export function useSchools(params: SearchParams) {
     params.has_reviews,
     params.has_gaccom,
     params.sort,
+    params.center_lat,
+    params.center_lng,
+    params.radius_km,
   ])
 
   return { schools, loading }

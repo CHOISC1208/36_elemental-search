@@ -34,6 +34,9 @@ export function SchoolCard({ school, isInCompare, onToggleCompare, canAdd, searc
           {school.nearest_station && (
             <p className="text-xs text-gray-400 mt-0.5">🚉 {school.nearest_station}</p>
           )}
+          {school.distance_km != null && (
+            <p className="text-xs text-brand font-medium mt-0.5">📍 {school.distance_km.toFixed(1)}km</p>
+          )}
           {school.student_count != null && (
             <p className="text-xs text-gray-400">👨‍👦 児童数 {school.student_count}人</p>
           )}

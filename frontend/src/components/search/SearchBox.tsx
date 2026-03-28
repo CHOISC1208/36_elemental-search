@@ -19,6 +19,10 @@ export const DEFAULT_SEARCH_PARAMS: SearchParams = {
   has_reviews: false,
   has_gaccom: false,
   sort: 'rating',
+  postal_code: '',
+  radius_km: null,
+  center_lat: null,
+  center_lng: null,
 }
 
 interface SearchBoxProps {
@@ -70,6 +74,16 @@ export function SearchBox({ onSearch }: SearchBoxProps) {
     const next = { ...params, school_name: school.school_name }
     setParams(next)
     onSearch(next)
+  }
+
+  const handleSearch = () => {
+    // 都道府県検索時は半径検索パラメータをクリア
+    onSearch({ ...params, postal_code: '', radius_km: null, center_lat: null, center_lng: null })
+  }
+
+  const handleReset = () => {
+    setParams(DEFAULT_SEARCH_PARAMS)
+    onSearch(DEFAULT_SEARCH_PARAMS)
   }
 
   return (
@@ -178,13 +192,13 @@ export function SearchBox({ onSearch }: SearchBoxProps) {
       {/* ボタン */}
       <div className="flex justify-end gap-2">
         <button
-          onClick={() => { setParams(DEFAULT_SEARCH_PARAMS); onSearch(DEFAULT_SEARCH_PARAMS) }}
+          onClick={handleReset}
           className="text-sm text-gray-500 hover:text-gray-700 px-3 py-1"
         >
           リセット
         </button>
         <button
-          onClick={() => onSearch(params)}
+          onClick={handleSearch}
           className="bg-brand text-white rounded-lg px-4 py-2 text-sm hover:bg-orange-500 transition-colors"
         >
           検索

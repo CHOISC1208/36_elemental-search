@@ -17,6 +17,9 @@ export interface School {
   selection_method: string | null
   rating_avg: number | null
   review_count: number
+  latitude?: number | null
+  longitude?: number | null
+  distance_km?: number | null
   student_count?: number | null
   teacher_count?: number | null
   linked_jhs?: string | null
@@ -63,4 +66,9 @@ export interface SearchParams {
   has_reviews: boolean
   has_gaccom: boolean
   sort: 'rating' | 'reviews' | 'station'
+  // 半径検索
+  postal_code: string
+  radius_km: number | null
+  center_lat: number | null
+  center_lng: number | null
 }
