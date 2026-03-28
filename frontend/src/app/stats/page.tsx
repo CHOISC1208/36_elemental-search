@@ -5,6 +5,7 @@ import { PrefectureBarChart } from '@/components/stats/PrefectureBarChart'
 import { CityBarChart } from '@/components/stats/CityBarChart'
 import { DistributionTable } from '@/components/stats/DistributionTable'
 import { usePrefectures } from '@/hooks/usePrefCities'
+import { MainTabBar } from '@/components/nav/MainTabBar'
 
 export default function StatsPage() {
   const [selectedPref, setSelectedPref] = useState<string | null>(null)
@@ -35,7 +36,8 @@ export default function StatsPage() {
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      <MainTabBar />
       <div>
         <h1 className="text-xl font-bold text-gray-900">学校分布</h1>
         <p className="text-sm text-gray-500 mt-1">全国の学校数を都道府県・市区町村別に確認できます</p>

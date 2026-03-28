@@ -1,6 +1,7 @@
 'use client'
 import { useState } from 'react'
 import { SchoolSearchForm } from '@/components/search/SchoolSearchForm'
+import { MainTabBar } from '@/components/nav/MainTabBar'
 import { SchoolTable } from '@/components/school/SchoolTable'
 import { SchoolSidePeek } from '@/components/school/SchoolSidePeek'
 import { CompareBar } from '@/components/compare/CompareBar'
@@ -39,25 +40,11 @@ export default function HomePage() {
 
   return (
     <div className="space-y-4">
-      {/* ── モード切替タブ ── */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-        <button
-          onClick={() => setMode('school')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            mode === 'school' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          学校で探す
-        </button>
-        <button
-          onClick={() => setMode('review')}
-          className={`flex-1 py-2 text-sm font-medium rounded-md transition-colors ${
-            mode === 'review' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-          }`}
-        >
-          口コミで探す
-        </button>
-      </div>
+      {/* ── タブナビゲーション（4タブ） ── */}
+      <MainTabBar
+        activeTab={mode === 'review' ? 'review' : 'school'}
+        onModeChange={setMode}
+      />
 
       {/* ── 学校検索モード ── */}
       {mode === 'school' && (

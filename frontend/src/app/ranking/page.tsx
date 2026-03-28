@@ -5,9 +5,11 @@ import { useRankingStore } from '@/store/rankingStore'
 import { WeightSlider } from '@/components/ranking/WeightSlider'
 import { RankingCard } from '@/components/ranking/RankingCard'
 import { CompareBar } from '@/components/compare/CompareBar'
+import { SchoolSidePeek } from '@/components/school/SchoolSidePeek'
 import { usePrefectures, usePrefCities } from '@/hooks/usePrefCities'
 import { calcScore, WEIGHT_LABELS, PRESETS, PresetKey } from '@/types/ranking'
 import { SchoolType } from '@/types/school'
+import { MainTabBar } from '@/components/nav/MainTabBar'
 
 const PRESET_LABELS: Record<PresetKey, string> = {
   balanced: 'バランス型',
@@ -25,6 +27,7 @@ export default function RankingPage() {
   const [minReviews, setMinReviews] = useState(3)
   const [showSliders, setShowSliders] = useState(true)
   const [displayCount, setDisplayCount] = useState(20)
+  const [sidePeekId, setSidePeekId] = useState<string | null>(null)
 
   const prefectures = usePrefectures()
   const cities = usePrefCities(prefSlug)
@@ -43,8 +46,9 @@ export default function RankingPage() {
   }, [schools, weights])
 
   return (
-    <div>
-      <div className="mb-4">
+    <div className="space-y-4">
+      <MainTabBar />
+      <div>
         <h1 className="text-xl font-bold text-gray-900">カテゴリ別ランキング</h1>
         <p className="text-sm text-gray-500 mt-1">評価カテゴリのウェイトを調整して独自のランキングを作成</p>
       </div>
@@ -176,7 +180,14 @@ export default function RankingPage() {
               <p className="text-sm text-gray-500 mb-3">{ranked.length}校中 上位{Math.min(displayCount, ranked.length)}校</p>
               <div className="space-y-3">
                 {ranked.slice(0, displayCount).map((school, i) => (
-                  <RankingCard key={school.school_id} rank={i + 1} school={school} weights={weights} />
+                  <RankingCard
+                    key={school.school_id}
+                    rank={i + 1}
+                    school={school}
+                    weights={weights}
+                    isSelected={sidePeekId === school.school_id}
+                    onSchoolClick={(id) => setSidePeekId(id === sidePeekId ? null : id)}
+                  />
                 ))}
               </div>
               {displayCount < ranked.length && (
@@ -193,6 +204,7 @@ export default function RankingPage() {
       </div>
 
       <CompareBar />
+      <SchoolSidePeek schoolId={sidePeekId} onClose={() => setSidePeekId(null)} />
     </div>
   )
 }
