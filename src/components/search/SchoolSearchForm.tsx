@@ -154,6 +154,21 @@ export function SchoolSearchForm({ onSearch }: SchoolSearchFormProps) {
     setRadiusKm(prev => prev === km ? null : km) // トグル
   }
 
+  /** 国土地理院 API で住所文字列 → 緯度経度に変換 */
+  const geocodeByAddress = async (address: string): Promise<LatLng | null> => {
+    try {
+      const res = await fetch(
+        `https://msearch.gsi.go.jp/address-search/AddressSearch?q=${encodeURIComponent(address)}`
+      )
+      const data = await res.json()
+      if (!data?.length) return null
+      const [lng, lat] = data[0].geometry.coordinates
+      return { lat, lng }
+    } catch {
+      return null
+    }
+  }
+
   /** 郵便番号 → 緯度経度 + 住所ラベルを返す */
   const geocodePostal = async (): Promise<{ latlng: LatLng; label: string; prefValue: string | null; cityName: string } | null> => {
     const digits = postalCode.replace(/[^0-9]/g, '')
@@ -162,11 +177,23 @@ export function SchoolSearchForm({ onSearch }: SchoolSearchFormProps) {
     const data = await res.json()
     if (data.status !== 200 || !data.results?.length) { setPostalError('郵便番号が見つかりませんでした'); return null }
     const r = data.results[0]
+    const label = `${r.address1}${r.address2}${r.address3}`
     const rawPref   = (r.address1 as string).replace(/[都道府県]$/, '')
     const kantoPref = KANTO_PREFS.find(kp => kp.value === rawPref)
+
+    // zipcloud が座標を持たない場合は国土地理院 API にフォールバック
+    let lat = parseFloat(r.latitude)
+    let lng = parseFloat(r.longitude)
+    if (isNaN(lat) || isNaN(lng)) {
+      const fallback = await geocodeByAddress(label)
+      if (!fallback) { setPostalError('この郵便番号の座標が取得できませんでした'); return null }
+      lat = fallback.lat
+      lng = fallback.lng
+    }
+
     return {
-      latlng:    { lat: parseFloat(r.latitude), lng: parseFloat(r.longitude) },
-      label:     `${r.address1}${r.address2}${r.address3}`,
+      latlng:    { lat, lng },
+      label,
       prefValue: kantoPref?.value ?? null,
       cityName:  r.address2 as string,
     }
