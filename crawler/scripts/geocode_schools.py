@@ -140,9 +140,20 @@ def main():
             lat, lng = result
             print(f"  → lat={lat:.6f}, lng={lng:.6f}")
             if not args.dry_run:
-                client.schema(SCHEMA).from_("schools").update(
-                    {"latitude": lat, "longitude": lng}
-                ).eq("school_id", sid).execute()
+                for attempt in range(5):
+                    try:
+                        client.schema(SCHEMA).from_("schools").update(
+                            {"latitude": lat, "longitude": lng}
+                        ).eq("school_id", sid).execute()
+                        break
+                    except Exception as e:
+                        wait = 2 ** attempt
+                        print(f"  [DB error attempt {attempt+1}/5] {e} — {wait}s後にリトライ")
+                        time.sleep(wait)
+                else:
+                    print("  [DB error] リトライ上限に達しました。スキップします")
+                    ng += 1
+                    continue
             ok += 1
         else:
             print("  → ジオコーディング失敗")
