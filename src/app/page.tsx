@@ -87,6 +87,7 @@ export default function HomePage() {
                 compareList={compareList}
                 onToggleCompare={handleToggleCompare}
                 canAdd={canAdd}
+                showDistance={!!query?.radius_km}
               />
 
               {/* 0件メッセージ */}

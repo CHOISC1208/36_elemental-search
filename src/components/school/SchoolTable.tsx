@@ -3,7 +3,7 @@ import { useRef, useState } from 'react'
 import { School } from '@/types/school'
 import { Badge } from '@/components/ui/Badge'
 
-type ColKey = 'name' | 'location' | 'type' | 'station' | 'rating' | 'reviews' | 'compare'
+type ColKey = 'name' | 'location' | 'type' | 'station' | 'rating' | 'reviews' | 'distance' | 'compare'
 
 const DEFAULT_WIDTHS: Record<ColKey, number> = {
   name:     260,
@@ -12,16 +12,18 @@ const DEFAULT_WIDTHS: Record<ColKey, number> = {
   station:  140,
   rating:    68,
   reviews:   68,
+  distance:  72,
   compare:   80,
 }
 
-const COL_HEADERS: { key: ColKey; label: string; align: 'left' | 'right' | 'center' }[] = [
+const COL_HEADERS_BASE: { key: ColKey; label: string; align: 'left' | 'right' | 'center' }[] = [
   { key: 'name',     label: '学校名',  align: 'left'   },
   { key: 'location', label: '所在地',  align: 'left'   },
   { key: 'type',     label: '種別',    align: 'left'   },
   { key: 'station',  label: '最寄駅',  align: 'left'   },
   { key: 'rating',   label: '評価',    align: 'right'  },
   { key: 'reviews',  label: '口コミ',  align: 'right'  },
+  { key: 'distance', label: '距離',    align: 'right'  },
   { key: 'compare',  label: '',        align: 'center' },
 ]
 
@@ -32,6 +34,7 @@ interface SchoolTableProps {
   compareList: School[]
   onToggleCompare: (school: School) => void
   canAdd: boolean
+  showDistance?: boolean
 }
 
 export function SchoolTable({
@@ -41,8 +44,12 @@ export function SchoolTable({
   compareList,
   onToggleCompare,
   canAdd,
+  showDistance = false,
 }: SchoolTableProps) {
   const [widths, setWidths] = useState<Record<ColKey, number>>(DEFAULT_WIDTHS)
+  const COL_HEADERS = showDistance
+    ? COL_HEADERS_BASE
+    : COL_HEADERS_BASE.filter(c => c.key !== 'distance')
   const resizing = useRef<{ col: ColKey; startX: number; startWidth: number } | null>(null)
 
   const handleResizeStart = (col: ColKey, e: React.MouseEvent) => {
@@ -160,6 +167,16 @@ export function SchoolTable({
                 <td className="px-3 py-2.5 text-right text-gray-500" style={{ width: widths.reviews }}>
                   {school.review_count}
                 </td>
+
+                {/* 距離（半径検索時のみ） */}
+                {showDistance && (
+                  <td className="px-3 py-2.5 text-right text-gray-500" style={{ width: widths.distance }}>
+                    {school.distance_km != null
+                      ? <span className="text-xs font-medium text-brand">{school.distance_km.toFixed(1)}km</span>
+                      : <span className="text-gray-300">—</span>
+                    }
+                  </td>
+                )}
 
                 {/* 比較ボタン */}
                 <td
