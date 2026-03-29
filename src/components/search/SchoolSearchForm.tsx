@@ -71,6 +71,7 @@ export function SchoolSearchForm({ onSearch }: SchoolSearchFormProps) {
   const [postalLoading, setPostalLoading] = useState(false)
   const [postalError, setPostalError]   = useState<string | null>(null)
   const [postalLabel, setPostalLabel]   = useState<string | null>(null)
+  const [geoLoading, setGeoLoading]     = useState(false)
 
   // ③ 距離
   const [radiusKm, setRadiusKm]   = useState<RadiusKm | null>(null)
@@ -302,6 +303,50 @@ export function SchoolSearchForm({ onSearch }: SchoolSearchFormProps) {
     setCenter(null)
   }
 
+  /** 現在地ボタン: Geolocation API → 即検索 or 中心だけセット */
+  const handleCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      setPostalError('このブラウザは位置情報に対応していません')
+      return
+    }
+    setGeoLoading(true)
+    setPostalError(null)
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const latlng = { lat: pos.coords.latitude, lng: pos.coords.longitude }
+        setCenter(latlng)
+        setPostalLabel('現在地')
+        setPostalCode('')
+        // ②の選択をクリア
+        setPrefectures([])
+        setSelectedCity(null)
+        setCityQuery('')
+        setGeoLoading(false)
+        // 距離が選択済みなら即検索
+        if (radiusKm) {
+          onSearch({
+            school_name:  schoolName,
+            prefectures:  [],
+            city_name:    null,
+            school_types: schoolTypes,
+            center_lat:   latlng.lat,
+            center_lng:   latlng.lng,
+            radius_km:    radiusKm,
+          })
+        }
+      },
+      (err) => {
+        setGeoLoading(false)
+        if (err.code === err.PERMISSION_DENIED) {
+          setPostalError('位置情報の使用が拒否されました')
+        } else {
+          setPostalError('現在地の取得に失敗しました')
+        }
+      },
+      { timeout: 10000 }
+    )
+  }
+
   const postalReady = postalCode.replace(/[^0-9]/g, '').length === 7
 
   // ── Render ─────────────────────────────────────────────────────
@@ -466,6 +511,20 @@ export function SchoolSearchForm({ onSearch }: SchoolSearchFormProps) {
                 {postalLoading ? '...' : radiusKm ? '検索' : '補完'}
               </button>
             </div>
+            {/* 現在地ボタン */}
+            <button
+              type="button"
+              onClick={handleCurrentLocation}
+              disabled={geoLoading}
+              className="mt-1.5 flex items-center gap-1 text-xs text-gray-500 hover:text-brand disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+                <path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z" strokeOpacity="0"/>
+              </svg>
+              {geoLoading ? '取得中...' : '現在地を使う'}
+            </button>
             {postalError && <p className="text-xs text-red-500 mt-1.5">{postalError}</p>}
             {postalLabel && (
               <p className="text-xs text-brand mt-1.5">
