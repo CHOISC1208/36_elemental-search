@@ -165,6 +165,7 @@ export default function HomePage() {
               loading={rvLoading}
               searched={rvSearched}
               keyword={reviewKeyword}
+              onSelectSchool={setSidePeekId}
             />
           </div>
         </div>

@@ -1,5 +1,4 @@
 'use client'
-import Link from 'next/link'
 import { useState } from 'react'
 import { ReviewSearchResult } from '@/hooks/useReviewSearch'
 import { highlightText } from '@/utils/highlight'
@@ -10,11 +9,12 @@ interface ReviewSearchResultsProps {
   loading: boolean
   searched: boolean
   keyword: string
+  onSelectSchool: (schoolId: string) => void
 }
 
 const PREVIEW_LENGTH = 150
 
-function ReviewCard({ result, keyword }: { result: ReviewSearchResult; keyword: string }) {
+function ReviewCard({ result, keyword, onSelectSchool }: { result: ReviewSearchResult; keyword: string; onSelectSchool: (schoolId: string) => void }) {
   const [expanded, setExpanded] = useState(false)
   const text = result.text_overall ?? ''
   const isLong = text.length > PREVIEW_LENGTH
@@ -24,9 +24,12 @@ function ReviewCard({ result, keyword }: { result: ReviewSearchResult; keyword: 
     <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <Link href={`/schools/${result.school_id}`} className="font-bold text-gray-900 hover:text-brand text-sm">
+          <button
+            onClick={() => onSelectSchool(result.school_id)}
+            className="font-bold text-gray-900 hover:text-brand text-sm text-left"
+          >
             {result.school_name}
-          </Link>
+          </button>
           <p className="text-xs text-gray-400">{result.prefecture} {result.city}</p>
         </div>
         <div className="shrink-0 text-right">
@@ -55,18 +58,18 @@ function ReviewCard({ result, keyword }: { result: ReviewSearchResult; keyword: 
         {result.post_date && (
           <p className="text-xs text-gray-400">{result.post_date}</p>
         )}
-        <Link
-          href={`/schools/${result.school_id}`}
+        <button
+          onClick={() => onSelectSchool(result.school_id)}
           className="ml-auto text-xs text-brand hover:underline"
         >
           学校詳細を見る →
-        </Link>
+        </button>
       </div>
     </div>
   )
 }
 
-export function ReviewSearchResults({ results, loading, searched, keyword }: ReviewSearchResultsProps) {
+export function ReviewSearchResults({ results, loading, searched, keyword, onSelectSchool }: ReviewSearchResultsProps) {
   if (loading) {
     return (
       <div className="space-y-3 mt-4">
@@ -93,7 +96,7 @@ export function ReviewSearchResults({ results, loading, searched, keyword }: Rev
     <div className="mt-4 space-y-3">
       <p className="text-sm text-gray-600">{results.length}件の口コミ</p>
       {results.map((r) => (
-        <ReviewCard key={r.review_id} result={r} keyword={keyword} />
+        <ReviewCard key={r.review_id} result={r} keyword={keyword} onSelectSchool={onSelectSchool} />
       ))}
     </div>
   )
