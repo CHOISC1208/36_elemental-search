@@ -1,0 +1,7 @@
+.python-version
+crawler/
+data/
+db/
+docs/
+memory/
+review_candidates.csv
